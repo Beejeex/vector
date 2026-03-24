@@ -1,0 +1,284 @@
+# KumaMonitor CRD — apply to cluster with: kubectl apply -f deploy/crd.yaml
+# Full field documentation: docs/crd.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: kumamonitors.monitoring.monitoring.example.com
+spec:
+  group: monitoring.monitoring.example.com
+  names:
+    kind: KumaMonitor
+    listKind: KumaMonitorList
+    plural: kumamonitors
+    singular: kumamonitor
+    shortNames:
+      - km
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - name
+                - type
+              properties:
+                name:
+                  type: string
+                type:
+                  type: string
+                  enum:
+                    - http
+                    - keyword
+                    - json-query
+                    - grpc-keyword
+                    - dns
+                    - docker
+                    - real-browser
+                    - push
+                    - steam
+                    - gamedig
+                    - mqtt
+                    - kafka-producer
+                    - sqlserver
+                    - postgres
+                    - mysql
+                    - mongodb
+                    - radius
+                    - redis
+                    - tailscale-ping
+                    - port
+                    - ping
+                    - group
+                url:
+                  type: string
+                description:
+                  type: string
+                interval:
+                  type: integer
+                  default: 60
+                  minimum: 20
+                timeout:
+                  type: integer
+                  default: 30
+                  minimum: 1
+                retry_interval:
+                  type: integer
+                  default: 60
+                  minimum: 20
+                resend_interval:
+                  type: integer
+                  default: 0
+                  minimum: 0
+                retries:
+                  type: integer
+                  default: 1
+                  minimum: 0
+                enabled:
+                  type: boolean
+                  default: true
+                maintenance:
+                  type: boolean
+                  default: false
+                upside_down:
+                  type: boolean
+                  default: false
+                expiry_notification:
+                  type: boolean
+                  default: false
+                method:
+                  type: string
+                  default: GET
+                  enum:
+                    - GET
+                    - POST
+                    - PUT
+                    - PATCH
+                    - DELETE
+                    - HEAD
+                headers:
+                  type: object
+                  additionalProperties:
+                    type: string
+                body:
+                  type: string
+                http_body_encoding:
+                  type: string
+                  enum:
+                    - json
+                    - form
+                    - xml
+                max_redirects:
+                  type: integer
+                  default: 10
+                  minimum: 0
+                accepted_statuscodes:
+                  type: array
+                  items:
+                    type: string
+                ignore_tls:
+                  type: boolean
+                  default: false
+                cache_bust:
+                  type: boolean
+                  default: false
+                ip_family:
+                  type: string
+                  enum:
+                    - ipv4
+                    - ipv6
+                    - auto
+                auth_method:
+                  type: string
+                  enum:
+                    - ""
+                    - basic
+                    - ntlm
+                    - mtls
+                    - oauth2-cc
+                basic_auth_user:
+                  type: string
+                basic_auth_pass:
+                  type: string
+                auth_domain:
+                  type: string
+                auth_workstation:
+                  type: string
+                oauth_client_id:
+                  type: string
+                oauth_client_secret:
+                  type: string
+                oauth_token_url:
+                  type: string
+                oauth_scopes:
+                  type: string
+                oauth_audience:
+                  type: string
+                oauth_auth_method:
+                  type: string
+                  enum:
+                    - client_secret_basic
+                    - client_secret_post
+                tls_cert:
+                  type: string
+                tls_key:
+                  type: string
+                tls_ca:
+                  type: string
+                keyword:
+                  type: string
+                invert_keyword:
+                  type: boolean
+                  default: false
+                json_path:
+                  type: string
+                json_path_operator:
+                  type: string
+                  enum:
+                    - contains
+                    - not_contains
+                    - equals
+                    - not_equals
+                    - less_than
+                    - greater_than
+                expected_value:
+                  type: string
+                hostname:
+                  type: string
+                port:
+                  type: integer
+                  minimum: 1
+                  maximum: 65535
+                packet_size:
+                  type: integer
+                  default: 56
+                dns_resolve_type:
+                  type: string
+                  default: A
+                  enum:
+                    - A
+                    - AAAA
+                    - CAA
+                    - CNAME
+                    - MX
+                    - NS
+                    - PTR
+                    - SOA
+                    - SRV
+                    - TXT
+                dns_resolve_server:
+                  type: string
+                docker_container:
+                  type: string
+                docker_host:
+                  type: string
+                mqtt_topic:
+                  type: string
+                mqtt_username:
+                  type: string
+                mqtt_password:
+                  type: string
+                mqtt_success_message:
+                  type: string
+                database_connection_string:
+                  type: string
+                database_query:
+                  type: string
+                kafka_producer_brokers:
+                  type: array
+                  items:
+                    type: string
+                kafka_producer_topic:
+                  type: string
+                kafka_producer_message:
+                  type: string
+                kafka_producer_ssl:
+                  type: boolean
+                  default: false
+                kafka_producer_allow_auto_topic_creation:
+                  type: boolean
+                  default: false
+                grpc_url:
+                  type: string
+                grpc_protobuf:
+                  type: string
+                grpc_body:
+                  type: string
+                grpc_metadata:
+                  type: string
+                grpc_method:
+                  type: string
+                grpc_service_name:
+                  type: string
+                grpc_enable_tls:
+                  type: boolean
+                  default: false
+                radius_username:
+                  type: string
+                radius_password:
+                  type: string
+                radius_called_station_id:
+                  type: string
+                radius_calling_station_id:
+                  type: string
+                radius_secret:
+                  type: string
+                group:
+                  type: string
+                parent_name:
+                  type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
+                notification_names:
+                  type: array
+                  items:
+                    type: string

@@ -1,0 +1,502 @@
+# Example KumaMonitor resources
+# Apply with: kubectl apply -f example-kumamonitor.yaml
+#
+# Each resource is reconciled by Vector into a corresponding Uptime Kuma monitor.
+# Identity key: <namespace>/<name>   Ownership tag: managed-by=vector
+#
+# Monitor types covered in this file:
+#   group, http, keyword, json-query, ping, port (TCP), dns, push,
+#   docker, mqtt, kafka-producer, grpc-keyword,
+#   postgres, mysql, mongodb, redis, radius,
+#   maintenance mode, disabled monitor
+
+---
+# ── Group ────────────────────────────────────────────────────────────────────
+# Parent container. url is not used by Uptime Kuma for this type.
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: production-group
+  namespace: monitoring
+spec:
+  name: Production
+  type: group
+
+---
+# ── HTTP — minimal ────────────────────────────────────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: my-website
+  namespace: monitoring
+spec:
+  name: My Website
+  type: http
+  url: https://example.com
+
+---
+# ── HTTP — full options ───────────────────────────────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: api-health
+  namespace: monitoring
+spec:
+  name: API Health Check
+  type: http
+  url: https://api.example.com/health
+  description: Verifies the /health endpoint returns 200 every 30 s
+  method: GET
+  interval: 30
+  timeout: 10
+  retry_interval: 30
+  resend_interval: 3
+  retries: 2
+  max_redirects: 5
+  accepted_statuscodes:
+    - "200-299"
+  ignore_tls: false
+  upside_down: false
+  expiry_notification: true
+  cache_bust: false
+  ip_family: ipv4
+  enabled: true
+  headers:
+    X-Internal-Token: changeme
+    Accept: application/json
+  group: Production
+  tags:
+    - production
+    - api
+  notification_names:
+    - slack-alerts
+    - pagerduty
+
+---
+# ── HTTP — POST with JSON body ────────────────────────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: api-login
+  namespace: monitoring
+spec:
+  name: API Login Endpoint
+  type: http
+  url: https://api.example.com/v1/auth/login
+  method: POST
+  body: '{"username":"probe","password":"probe"}'
+  http_body_encoding: json
+  headers:
+    Content-Type: application/json
+  accepted_statuscodes:
+    - "200"
+    - "201"
+  interval: 60
+  timeout: 15
+  group: Production
+  tags:
+    - production
+    - auth
+
+---
+# ── HTTP — Basic authentication ───────────────────────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: internal-dashboard
+  namespace: monitoring
+spec:
+  name: Internal Dashboard
+  type: http
+  url: https://dashboard.internal.example.com
+  auth_method: basic
+  basic_auth_user: monitor
+  basic_auth_pass: changeme
+  interval: 60
+  group: Production
+
+---
+# ── HTTP — OAuth2 Client Credentials ─────────────────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: oauth-protected-api
+  namespace: monitoring
+spec:
+  name: OAuth2 Protected API
+  type: http
+  url: https://api.example.com/protected/status
+  auth_method: oauth2-cc
+  oauth_client_id: monitor-client
+  oauth_client_secret: changeme
+  oauth_token_url: https://auth.example.com/oauth/token
+  oauth_scopes: "read:status"
+  oauth_audience: https://api.example.com
+  oauth_auth_method: client_secret_basic
+  interval: 60
+
+---
+# ── HTTP — mTLS client certificate ───────────────────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: mtls-service
+  namespace: monitoring
+spec:
+  name: mTLS Service
+  type: http
+  url: https://mtls-service.example.com/health
+  auth_method: mtls
+  tls_cert: |
+    -----BEGIN CERTIFICATE-----
+    <client certificate PEM>
+    -----END CERTIFICATE-----
+  tls_key: |
+    -----BEGIN PRIVATE KEY-----
+    <client private key PEM>
+    -----END PRIVATE KEY-----
+  tls_ca: |
+    -----BEGIN CERTIFICATE-----
+    <CA certificate PEM>
+    -----END CERTIFICATE-----
+  interval: 60
+
+---
+# ── HTTP — NTLM (Windows environments) ───────────────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: windows-service
+  namespace: monitoring
+spec:
+  name: Windows IIS Service
+  type: http
+  url: https://winserver.example.com/health
+  auth_method: ntlm
+  basic_auth_user: DOMAIN\monitor
+  basic_auth_pass: changeme
+  auth_domain: EXAMPLE
+  auth_workstation: MONITOR-HOST
+  interval: 60
+
+---
+# ── Keyword — UP when keyword present in response ─────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: status-page-keyword
+  namespace: monitoring
+spec:
+  name: Status Page Keyword
+  type: keyword
+  url: https://status.example.com
+  keyword: "All systems operational"
+  invert_keyword: false
+  interval: 60
+  group: Production
+  tags:
+    - status
+
+---
+# ── Keyword — UP when keyword is absent (inverted) ────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: error-banner-absent
+  namespace: monitoring
+spec:
+  name: Error Banner Absent
+  type: keyword
+  url: https://app.example.com
+  keyword: "CRITICAL ERROR"
+  invert_keyword: true
+  interval: 60
+
+---
+# ── JSON Query — evaluate a field in a JSON API response ─────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: api-json-status
+  namespace: monitoring
+spec:
+  name: API JSON Status Field
+  type: json-query
+  url: https://api.example.com/status
+  json_path: $.status
+  json_path_operator: equals
+  expected_value: "ok"
+  interval: 60
+  headers:
+    Accept: application/json
+
+---
+# ── Ping — ICMP ping ──────────────────────────────────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: db-host-ping
+  namespace: monitoring
+spec:
+  name: Database Host Ping
+  type: ping
+  url: 10.0.0.50
+  packet_size: 56
+  interval: 60
+  retries: 2
+  tags:
+    - infrastructure
+
+---
+# ── Port — TCP port connectivity check ───────────────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: postgres-tcp
+  namespace: monitoring
+spec:
+  name: PostgreSQL TCP Port
+  type: port
+  url: 10.0.0.50
+  port: 5432
+  interval: 60
+  timeout: 5
+  group: Databases
+  tags:
+    - infrastructure
+    - postgres
+
+---
+# ── DNS — resolve a hostname and verify the record ───────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: dns-api
+  namespace: monitoring
+spec:
+  name: DNS api.example.com A record
+  type: dns
+  url: api.example.com
+  dns_resolve_type: A
+  dns_resolve_server: 1.1.1.1
+  interval: 60
+  tags:
+    - dns
+    - infrastructure
+
+---
+# ── DNS — MX record check ─────────────────────────────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: dns-mx
+  namespace: monitoring
+spec:
+  name: DNS MX Record
+  type: dns
+  url: example.com
+  dns_resolve_type: MX
+  dns_resolve_server: 8.8.8.8
+  interval: 300
+
+---
+# ── Push — heartbeat endpoint ─────────────────────────────────────────────────
+# Uptime Kuma auto-generates the push URL. The url field is ignored for this type.
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: batch-job-heartbeat
+  namespace: monitoring
+spec:
+  name: Batch Job Heartbeat
+  type: push
+  interval: 300
+  retries: 1
+  tags:
+    - jobs
+
+---
+# ── Docker — container running check ─────────────────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: nginx-container
+  namespace: monitoring
+spec:
+  name: Nginx Container
+  type: docker
+  docker_container: nginx
+  docker_host: local-docker
+  interval: 60
+  group: Production
+  tags:
+    - docker
+
+---
+# ── MQTT — subscribe to a topic and check the payload ────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: iot-gateway-mqtt
+  namespace: monitoring
+spec:
+  name: IoT Gateway MQTT
+  type: mqtt
+  url: mqtt://broker.example.com
+  mqtt_topic: sensors/gateway/status
+  mqtt_success_message: online
+  mqtt_username: monitor
+  mqtt_password: changeme
+  interval: 60
+
+---
+# ── Kafka Producer — publish a probe message to verify broker reachability ────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: kafka-connectivity
+  namespace: monitoring
+spec:
+  name: Kafka Broker Connectivity
+  type: kafka-producer
+  kafka_producer_brokers:
+    - broker1.example.com:9092
+    - broker2.example.com:9092
+  kafka_producer_topic: uptime-kuma-probe
+  kafka_producer_message: '{"probe":"vector","status":"ok"}'
+  kafka_producer_ssl: false
+  kafka_producer_allow_auto_topic_creation: true
+  interval: 60
+
+---
+# ── gRPC Keyword — call a gRPC method and search the response ────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: grpc-health
+  namespace: monitoring
+spec:
+  name: gRPC Health Check
+  type: grpc-keyword
+  grpc_url: grpc://grpc.example.com:50051
+  grpc_service_name: grpc.health.v1.Health
+  grpc_method: Check
+  grpc_body: '{}'
+  grpc_metadata: '{"authorization":"Bearer changeme"}'
+  grpc_enable_tls: false
+  keyword: "SERVING"
+  interval: 60
+
+---
+# ── PostgreSQL — query check ──────────────────────────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: postgres-query
+  namespace: monitoring
+spec:
+  name: PostgreSQL Select 1
+  type: postgres
+  database_connection_string: postgres://monitor:changeme@10.0.0.50:5432/appdb
+  database_query: "SELECT 1"
+  interval: 60
+  timeout: 10
+  group: Databases
+
+---
+# ── MySQL / MariaDB — query check ────────────────────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: mysql-check
+  namespace: monitoring
+spec:
+  name: MySQL Select 1
+  type: mysql
+  database_connection_string: mysql://monitor:changeme@10.0.0.51:3306/appdb
+  database_query: "SELECT 1"
+  interval: 60
+  timeout: 10
+  group: Databases
+
+---
+# ── MongoDB — connectivity check ──────────────────────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: mongodb-check
+  namespace: monitoring
+spec:
+  name: MongoDB Connectivity
+  type: mongodb
+  database_connection_string: mongodb://monitor:changeme@10.0.0.52:27017/appdb
+  interval: 60
+  timeout: 10
+  group: Databases
+
+---
+# ── Redis — connectivity check ────────────────────────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: redis-check
+  namespace: monitoring
+spec:
+  name: Redis Connectivity
+  type: redis
+  database_connection_string: redis://:changeme@10.0.0.53:6379
+  interval: 60
+  timeout: 5
+  group: Databases
+
+---
+# ── Radius — AAA server authentication test ───────────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: radius-auth
+  namespace: monitoring
+spec:
+  name: RADIUS Auth Server
+  type: radius
+  url: 10.0.0.60
+  port: 1812
+  radius_username: probe
+  radius_password: changeme
+  radius_secret: sharedsecret
+  radius_called_station_id: "00-11-22-33-44-55"
+  radius_calling_station_id: "AA-BB-CC-DD-EE-FF"
+  interval: 60
+  timeout: 5
+
+---
+# ── Maintenance mode — monitor exists but is silenced ────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: legacy-service
+  namespace: monitoring
+spec:
+  name: Legacy Service (Maintenance)
+  type: http
+  url: https://legacy.example.com
+  enabled: true
+  maintenance: true
+  tags:
+    - legacy
+
+---
+# ── Disabled — paused, not deleted ───────────────────────────────────────────
+apiVersion: monitoring.monitoring.example.com/v1alpha1
+kind: KumaMonitor
+metadata:
+  name: staging-api
+  namespace: staging
+spec:
+  name: Staging API
+  type: http
+  url: https://staging-api.example.com/health
+  enabled: false
+  interval: 120
+  tags:
+    - staging
