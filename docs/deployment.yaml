@@ -1,0 +1,90 @@
+# Deployment reference — Vector controller
+#
+# Prerequisites (apply in order):
+#   kubectl apply -f deploy/crd.yaml
+#   kubectl apply -f deploy/rbac.yaml
+#   kubectl apply -f deploy/secret.yaml
+#
+# Before applying, update the image field to point to your registry:
+#   image: ghcr.io/beejeex/vector:latest
+#
+# Apply with:
+#   kubectl apply -f deploy/deployment.yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vector
+  namespace: vector
+  labels:
+    app: vector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vector
+  template:
+    metadata:
+      labels:
+        app: vector
+    spec:
+      serviceAccountName: vector
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: vector
+          image: ghcr.io/beejeex/vector:latest
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            # Credentials are sourced from the vector-credentials Secret.
+            # See docs/secret.yaml for the Secret template.
+            - name: KUMA_URL
+              valueFrom:
+                secretKeyRef:
+                  name: vector-credentials
+                  key: KUMA_URL
+            - name: KUMA_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: vector-credentials
+                  key: KUMA_USERNAME
+            - name: KUMA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vector-credentials
+                  key: KUMA_PASSWORD
+            # Optional — override defaults as needed.
+            - name: RECONCILE_INTERVAL
+              value: "60"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: VECTOR_SQLITE_PATH
+              value: "/data/vector.db"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+      volumes:
+        # For production, replace emptyDir with a PersistentVolumeClaim so the
+        # SQLite trace log survives pod restarts.  The controller recovers
+        # correctly from an empty or missing SQLite file, so emptyDir is safe.
+        - name: data
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

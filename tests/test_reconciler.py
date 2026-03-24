@@ -12,7 +12,9 @@ def _km(namespace="default", name="svc", **spec_kwargs) -> KumaMonitor:
     return KumaMonitor(namespace=namespace, name=name, spec=spec)
 
 
-def _live(monitor_id, key, name="svc", mtype="http", extra: dict = None) -> LiveMonitor:
+def _live(monitor_id, key, name: str = None, mtype="http", extra: dict = None) -> LiveMonitor:
+    if name is None:
+        name = key.split("/")[-1] if "/" in key else key
     base = {
         "id": monitor_id,
         "name": name,
@@ -143,11 +145,6 @@ class TestReconcilerCreate:
         assert "success" in outcomes
 
     def test_group_created_before_child(self):
-        group_km = _km("default", "infra-group", type="group")
-        group_km.spec.__dict__["type"] = "group"
-        child_km = _km("default", "api", type="http")
-
-        # patch spec types properly
         group_spec = KumaMonitorSpec(name="infra-group", type="group")
         child_spec = KumaMonitorSpec(name="api", type="http", url="https://example.com", group="infra-group")
         group_monitor = KumaMonitor(namespace="default", name="infra-group", spec=group_spec)
@@ -263,3 +260,143 @@ class TestReconcilerErrorIsolation:
         outcomes = [t[3] for t in store.traces]
         assert "error" in outcomes
         assert "success" in outcomes
+
+
+class TestReconcilerInvalidSpec:
+    def test_invalid_spec_is_skipped_gracefully(self):
+        """A monitor that raises in build_desired should be skipped; others still processed."""
+
+        class BrokenMonitor:
+            namespace = "default"
+            name = "broken"
+            # no spec attribute — will cause AttributeError in build_desired
+
+        valid_km = _km("default", "valid")
+        k8s = _MockK8s([BrokenMonitor(), valid_km])
+        kuma = _MockKuma([])
+        store = _MockStore()
+
+        Reconciler(k8s=k8s, kuma=kuma, store=store).run_once()
+
+        assert len(kuma.created) == 1
+        assert kuma.created[0]["name"] == "valid"
+
+
+class TestReconcilerCacheHit:
+    def test_cache_hit_skips_kuma_update_call(self):
+        """When stored hash matches desired hash, kuma.update_monitor must not be called."""
+        from src.services.diff import payload_hash
+        from src.models.desired import build_desired
+
+        km = _km("default", "api", interval=60)
+        desired = build_desired(km)
+        h = payload_hash(desired.payload)
+
+        # Live state differs from desired (would normally trigger update).
+        k8s = _MockK8s([km])
+        kuma = _MockKuma(live_monitors=[_live(1, "default/api", extra={"interval": 999})])
+        store = _MockStore()
+        # Seed the cache with the desired hash — we already applied this spec.
+        store.upsert_state("default/api", 1, h)
+
+        Reconciler(k8s=k8s, kuma=kuma, store=store).run_once()
+
+        assert len(kuma.updated) == 0
+
+    def test_cache_miss_triggers_update(self):
+        """When stored hash differs from desired hash, update must proceed."""
+        k8s = _MockK8s([_km("default", "api", interval=120)])
+        kuma = _MockKuma(live_monitors=[_live(1, "default/api")])
+        store = _MockStore()
+        store.upsert_state("default/api", 1, "stale_hash")
+
+        Reconciler(k8s=k8s, kuma=kuma, store=store).run_once()
+
+        assert len(kuma.updated) == 1
+
+    def test_no_cache_entry_triggers_update(self):
+        """When there is no cache entry at all, update must still run."""
+        k8s = _MockK8s([_km("default", "api", interval=120)])
+        kuma = _MockKuma(live_monitors=[_live(1, "default/api")])
+        store = _MockStore()
+
+        Reconciler(k8s=k8s, kuma=kuma, store=store).run_once()
+
+        assert len(kuma.updated) == 1
+
+
+class TestReconcilerNotifications:
+    def test_notification_name_resolved_to_id(self):
+        """Notification names in spec should be resolved to IDs in the created payload."""
+
+        class KumaWithNotifications(_MockKuma):
+            def get_notifications(self):
+                return [{"id": 7, "name": "slack"}]
+
+        spec = KumaMonitorSpec(
+            name="api", type="http", url="https://example.com", notification_names=["slack"]
+        )
+        km = KumaMonitor(namespace="default", name="api", spec=spec)
+        k8s = _MockK8s([km])
+        kuma = KumaWithNotifications([])
+        store = _MockStore()
+
+        Reconciler(k8s=k8s, kuma=kuma, store=store).run_once()
+
+        payload = kuma.created[0]
+        assert "notification_id_list" in payload
+        assert payload["notification_id_list"] == {"7": True}
+
+    def test_unknown_notification_name_omitted_from_payload(self):
+        """An unresolvable notification name should not crash; payload has no notification_id_list."""
+        spec = KumaMonitorSpec(
+            name="api", type="http", url="https://example.com", notification_names=["nonexistent"]
+        )
+        km = KumaMonitor(namespace="default", name="api", spec=spec)
+        k8s = _MockK8s([km])
+        kuma = _MockKuma([])
+        store = _MockStore()
+
+        Reconciler(k8s=k8s, kuma=kuma, store=store).run_once()
+
+        assert len(kuma.created) == 1
+        assert "notification_id_list" not in kuma.created[0]
+
+
+class TestReconcilerParentResolution:
+    def test_parent_id_injected_into_child_payload(self):
+        """Child monitor payload must contain parent=<group monitor ID>."""
+        group_spec = KumaMonitorSpec(name="infra-group", type="group")
+        child_spec = KumaMonitorSpec(
+            name="api", type="http", url="https://example.com", group="infra-group"
+        )
+        group_km = KumaMonitor(namespace="default", name="infra-group", spec=group_spec)
+        child_km = KumaMonitor(namespace="default", name="api", spec=child_spec)
+
+        k8s = _MockK8s([child_km, group_km])  # child listed first — ordering must still work
+        kuma = _MockKuma([])
+        store = _MockStore()
+
+        Reconciler(k8s=k8s, kuma=kuma, store=store).run_once()
+
+        # Group is created first (sorted), child second.
+        assert kuma.created[0]["type"] == "group"
+        child_payload = kuma.created[1]
+        assert "parent" in child_payload
+        assert child_payload["parent"] == 100  # first assigned ID from _MockKuma
+
+    def test_missing_parent_does_not_block_child_create(self):
+        """If the parent group is not found, child is still created without parent field."""
+        child_spec = KumaMonitorSpec(
+            name="api", type="http", url="https://example.com", group="nonexistent-group"
+        )
+        child_km = KumaMonitor(namespace="default", name="api", spec=child_spec)
+
+        k8s = _MockK8s([child_km])
+        kuma = _MockKuma([])
+        store = _MockStore()
+
+        Reconciler(k8s=k8s, kuma=kuma, store=store).run_once()
+
+        assert len(kuma.created) == 1
+        assert "parent" not in kuma.created[0]

@@ -92,3 +92,21 @@ class TestRecovery:
         store = SQLiteStore(path)
         store.upsert_state("ns/b", 7, "fresh")
         assert store.get_state("ns/b") == (7, "fresh")
+
+    def test_corrupt_file_does_not_raise(self, tmp_path):
+        """A corrupt SQLite file must not crash the controller — all operations degrade silently."""
+        path = str(tmp_path / "corrupt.db")
+        with open(path, "wb") as f:
+            f.write(b"THIS IS NOT A SQLITE DATABASE FILE")
+
+        # Construction must not raise
+        store = SQLiteStore(path)
+
+        # All operations must degrade gracefully (catch sqlite3.Error internally)
+        store.upsert_state("ns/a", 1, "hash")
+        store.delete_state("ns/a")
+        store.record_trace("ns", "a", "create", "success", monitor_id=1)
+        result = store.get_state("ns/a")
+
+        # State should be None — either not written (schema init failed) or unreadable
+        assert result is None

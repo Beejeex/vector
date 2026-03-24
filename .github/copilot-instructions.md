@@ -21,6 +21,20 @@ Create a small, reliable, idempotent controller that:
 - creates, updates, and deletes monitors in Uptime Kuma
 - only manages monitors that belong to this controller
 
+## Runtime environment
+All code runs inside containers. Never suggest or generate commands intended to be run directly on the host OS (e.g. `pip install`, `pytest`, `python main.py`). All execution — including tests — must happen inside a container or as part of a container build.
+
+## Before push / before update
+Before suggesting or applying any push or update, always validate:
+- all tests pass inside the container (`docker build` followed by the test stage, or `docker compose run tests`)
+- no regressions are introduced to existing tests
+- linting passes (ruff or equivalent, inside the container)
+- type checking passes (pyright/mypy, inside the container)
+- no secrets, credentials, or sensitive values are present in any staged file
+- YAML manifests in `deploy/` and `docs/` are valid and well-formed
+
+Do not push or advise pushing if any of the above checks fail.
+
 ## Non-goals for v1
 Do not add these unless explicitly requested:
 - no web UI

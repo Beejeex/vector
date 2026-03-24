@@ -43,7 +43,7 @@ class Reconciler:
             except Exception as exc:
                 logger.warning(
                     "Skipping monitor — failed to build desired state",
-                    extra={"namespace": km.namespace, "name": km.name, "error": str(exc)},
+                    extra={"namespace": km.namespace, "monitor_name": km.name, "error": str(exc)},
                 )
         logger.info("Desired state ready", extra={"count": len(desired_monitors)})
 
@@ -166,7 +166,7 @@ class Reconciler:
             self._store.record_trace(namespace, name, "create", "success", monitor_id)
             logger.info(
                 "Monitor created",
-                extra={"namespace": namespace, "name": name, "monitor_id": monitor_id},
+                extra={"namespace": namespace, "monitor_name": name, "monitor_id": monitor_id},
             )
             # Return a minimal LiveMonitor so subsequent creates can resolve it as a parent
             return LiveMonitor({
@@ -182,7 +182,7 @@ class Reconciler:
             self._store.record_trace(namespace, name, "create", "error", detail=str(exc))
             logger.error(
                 "Failed to create monitor",
-                extra={"namespace": namespace, "name": name, "error": str(exc)},
+                extra={"namespace": namespace, "monitor_name": name, "error": str(exc)},
             )
             return None
 
@@ -194,6 +194,18 @@ class Reconciler:
         notification_map: dict[str, int],
     ) -> None:
         namespace, name = _split_key(desired.identity_key)
+
+        # Cache-hit: if the stored spec hash already matches the desired hash we
+        # successfully applied this exact spec last cycle — skip the API call.
+        desired_hash = payload_hash(desired.payload)
+        cached = self._store.get_state(desired.identity_key)
+        if cached is not None and cached[1] == desired_hash:
+            logger.debug(
+                "Cache hit — skipping update, spec unchanged since last reconcile",
+                extra={"namespace": namespace, "monitor_name": name, "monitor_id": monitor_id},
+            )
+            return
+
         try:
             payload = self._resolve_payload(desired, live_monitors, notification_map)
             self._kuma.update_monitor(monitor_id, payload)
@@ -201,13 +213,13 @@ class Reconciler:
             self._store.record_trace(namespace, name, "update", "success", monitor_id)
             logger.info(
                 "Monitor updated",
-                extra={"namespace": namespace, "name": name, "monitor_id": monitor_id},
+                extra={"namespace": namespace, "monitor_name": name, "monitor_id": monitor_id},
             )
         except Exception as exc:
             self._store.record_trace(namespace, name, "update", "error", monitor_id, str(exc))
             logger.error(
                 "Failed to update monitor",
-                extra={"namespace": namespace, "name": name, "monitor_id": monitor_id, "error": str(exc)},
+                extra={"namespace": namespace, "monitor_name": name, "monitor_id": monitor_id, "error": str(exc)},
             )
 
     def _delete(self, monitor_id: int, live_monitors: list[LiveMonitor]) -> None:
@@ -222,13 +234,13 @@ class Reconciler:
             self._store.record_trace(namespace, name, "delete", "success", monitor_id)
             logger.info(
                 "Monitor deleted",
-                extra={"namespace": namespace, "name": name, "monitor_id": monitor_id},
+                extra={"namespace": namespace, "monitor_name": name, "monitor_id": monitor_id},
             )
         except Exception as exc:
             self._store.record_trace(namespace, name, "delete", "error", monitor_id, str(exc))
             logger.error(
                 "Failed to delete monitor",
-                extra={"namespace": namespace, "name": name, "monitor_id": monitor_id, "error": str(exc)},
+                extra={"namespace": namespace, "monitor_name": name, "monitor_id": monitor_id, "error": str(exc)},
             )
 
 

@@ -1,0 +1,52 @@
+# RBAC reference — Vector controller
+#
+# Creates:
+#   - Namespace: vector
+#   - ServiceAccount: vector (namespace: vector)
+#   - ClusterRole: vector  — read-only access to KumaMonitor resources
+#   - ClusterRoleBinding: vector — binds the role to the service account
+#
+# Apply with:
+#   kubectl apply -f deploy/rbac.yaml
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vector
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vector
+  namespace: vector
+
+---
+# Only get/list/watch is needed.  Vector never writes to Kubernetes.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vector
+rules:
+  - apiGroups:
+      - monitoring.monitoring.example.com
+    resources:
+      - kumamonitors
+    verbs:
+      - get
+      - list
+      - watch
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vector
+subjects:
+  - kind: ServiceAccount
+    name: vector
+    namespace: vector

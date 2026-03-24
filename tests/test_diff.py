@@ -11,7 +11,9 @@ def _desired(namespace="default", name="svc", **spec_kwargs):
     return build_desired(km)
 
 
-def _live(monitor_id, key, name="svc", mtype="http", extra: dict = None):
+def _live(monitor_id, key, name: str = None, mtype="http", extra: dict = None):
+    if name is None:
+        name = key.split("/")[-1] if "/" in key else key
     base = {
         "id": monitor_id,
         "name": name,

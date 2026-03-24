@@ -134,7 +134,7 @@ class SQLiteStore:
         except sqlite3.Error as exc:
             logger.warning(
                 "Failed to write reconcile trace",
-                extra={"namespace": namespace, "name": name, "error": str(exc)},
+                extra={"namespace": namespace, "monitor_name": name, "error": str(exc)},
             )
 
 
