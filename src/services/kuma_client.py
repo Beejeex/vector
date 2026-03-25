@@ -27,17 +27,25 @@ class UptimeKumaClient:
     Call connect() before use, disconnect() when done.
     """
 
-    def __init__(self, url: str, username: str, password: str) -> None:
+    def __init__(self, url: str, username: Optional[str], password: Optional[str], api_token: Optional[str] = None) -> None:
         self._url = url
         self._username = username
         self._password = password
+        self._api_token = api_token
         self._api: Optional[UptimeKumaApi] = None
         self._tag_cache: dict[str, int] = {}  # tag name → id
 
     def connect(self) -> None:
         self._api = UptimeKumaApi(self._url)
-        self._api.login(self._username, self._password)
-        logger.debug("Connected to Uptime Kuma", extra={"url": self._url})
+        if self._api_token:
+            self._api.login_by_token(self._api_token)
+            logger.debug("Connected to Uptime Kuma via API token", extra={"url": self._url})
+        elif self._username and self._password:
+            self._api.login(self._username, self._password)
+            logger.debug("Connected to Uptime Kuma via username/password", extra={"url": self._url})
+        else:
+            # Auth disabled — Uptime Kuma emits auto_login; no explicit login call needed.
+            logger.debug("Connected to Uptime Kuma (auth disabled)", extra={"url": self._url})
 
     def disconnect(self) -> None:
         if self._api:

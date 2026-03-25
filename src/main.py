@@ -31,7 +31,7 @@ def main() -> None:
     store = SQLiteStore(cfg.sqlite_path)
 
     while True:
-        kuma = UptimeKumaClient(cfg.kuma_url, cfg.kuma_username, cfg.kuma_password)
+        kuma = UptimeKumaClient(cfg.kuma_url, cfg.kuma_username, cfg.kuma_password, cfg.kuma_api_token)
         try:
             kuma.connect()
             Reconciler(k8s=k8s, kuma=kuma, store=store).run_once()

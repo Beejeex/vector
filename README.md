@@ -42,11 +42,14 @@ Update the `image` field in [`docs/deployment.yaml`](docs/deployment.yaml) to po
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `KUMA_URL` | yes | — | Base URL of your Uptime Kuma instance |
-| `KUMA_USERNAME` | yes | — | Uptime Kuma login username |
-| `KUMA_PASSWORD` | yes | — | Uptime Kuma login password |
+| `KUMA_USERNAME` | no* | — | Uptime Kuma login username |
+| `KUMA_PASSWORD` | no* | — | Uptime Kuma login password |
+| `KUMA_API_TOKEN` | no* | — | Uptime Kuma API key (alternative to username/password) |
 | `RECONCILE_INTERVAL` | no | `60` | Seconds between full reconcile cycles |
 | `VECTOR_SQLITE_PATH` | no | `/data/vector.db` | Path to the SQLite state file |
 | `LOG_LEVEL` | no | `INFO` | Logging level |
+
+\* Credentials are optional when Uptime Kuma has authentication disabled. When auth is enabled, provide either `KUMA_API_TOKEN` **or** both `KUMA_USERNAME` and `KUMA_PASSWORD`. API keys are not available when auth is disabled.
 
 ## Monitor types
 
