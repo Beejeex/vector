@@ -300,7 +300,7 @@ Handle failures predictably:
 Prefer partial success over full failure.
 
 ## Testing expectations
-Add tests early.
+Add tests early. **Keep tests up to date — every code change must be accompanied by updated or new tests. Never ship a change without verifying the full test suite passes inside the container.**
 
 Minimum tests:
 - spec to desired monitor conversion
@@ -309,16 +309,26 @@ Minimum tests:
 - create/update/delete decision logic
 - unmanaged monitor protection
 - deletion of no-longer-desired managed monitors
+- `UptimeKumaClient` — connect/disconnect (all 3 auth modes), `create_monitor` conditions injection, `list_monitors` (dict and list response), `ensure_tag` cache behaviour
 
 Where possible:
 - keep reconciliation logic pure and unit-testable
 - isolate Uptime Kuma API access behind an interface
 - mock API interactions cleanly
+- when fixing a bug, add a regression test that would have caught it
 
 For SQLite:
 - test that the controller recovers correctly if the SQLite file is missing or corrupt
 - test cache population and cache-hit paths separately
 - test that trace records are written for create, update, and delete actions
+
+## Test coverage rule
+Every new service method, bug fix, or behaviour change requires at minimum:
+1. A test that exercises the happy path
+2. A test that covers the specific edge case or bug that was fixed
+3. A test that verifies failure is handled gracefully (where applicable)
+
+Do not merge or push without running `docker build --target test` and confirming all tests pass.
 
 ## File structure guidance
 Prefer a layout similar to:

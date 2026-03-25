@@ -70,7 +70,13 @@ class UptimeKumaClient:
         return [LiveMonitor(m) for m in items]
 
     def create_monitor(self, payload: dict[str, Any]) -> int:
-        result = self._client.add_monitor(**payload)
+        # Build the data dict using the library helper, then inject `conditions` if absent.
+        # Uptime Kuma >= 1.23 requires conditions as a NOT NULL column; the library (1.2.1)
+        # does not populate it, causing an SQLITE_CONSTRAINT failure on add_monitor.
+        data = self._client._build_monitor_data(**payload)
+        if not data.get("conditions"):
+            data["conditions"] = "[]"
+        result = self._client._call("add", data)
         monitor_id: int = result["monitorID"]
         logger.info(
             "Monitor created in Uptime Kuma",
