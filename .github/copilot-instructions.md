@@ -35,6 +35,29 @@ Before suggesting or applying any push or update, always validate:
 
 Do not push or advise pushing if any of the above checks fail.
 
+## Image build and publish
+Every push to `master` that changes functional code must be accompanied by an image build and publish to `ghcr.io/beejeex/vector`. Always:
+
+1. Determine the next version by incrementing the patch number of the last git tag (e.g. `v0.0.2` → `v0.0.3`). Ask the user if a minor or major bump is more appropriate for large changes.
+2. Build the runtime image and tag it with both the new version and `latest`:
+   ```
+   docker build --target runtime -t ghcr.io/beejeex/vector:<version> -t ghcr.io/beejeex/vector:latest .
+   ```
+3. Push both tags to GHCR:
+   ```
+   docker push ghcr.io/beejeex/vector:<version>
+   docker push ghcr.io/beejeex/vector:latest
+   ```
+4. Create and push a git tag matching the version:
+   ```
+   git tag <version>
+   git push origin <version>
+   ```
+5. Update `deploy/deployment.yaml` image reference to the new version tag.
+6. Commit and push the deployment.yaml change.
+
+Never publish an image without passing tests first. Never reuse an existing version tag.
+
 ## Non-goals for v1
 Do not add these unless explicitly requested:
 - no web UI
