@@ -400,3 +400,121 @@ class TestReconcilerParentResolution:
 
         assert len(kuma.created) == 1
         assert "parent" not in kuma.created[0]
+
+
+# ---------------------------------------------------------------------------
+# Discovery integration in reconciler
+# ---------------------------------------------------------------------------
+
+
+class _MockDiscovery:
+    def __init__(self, monitors: list) -> None:
+        self._monitors = monitors
+
+    def run(self) -> list:
+        return self._monitors
+
+
+class TestReconcilerDiscovery:
+    def test_discovery_monitors_are_created(self):
+        """Monitors from discovery feed are created in Uptime Kuma."""
+        from src.models.desired import DesiredMonitor
+        from src.services.diff import payload_hash
+
+        discovered = DesiredMonitor(
+            identity_key="discovered:ingress:default/my-ingress/app.example.com",
+            payload={
+                "type": "http",
+                "name": "app.example.com",
+                "url": "http://app.example.com",
+                "interval": 60,
+                "timeout": 30,
+                "retryInterval": 60,
+                "resendInterval": 0,
+                "maxretries": 1,
+                "upsideDown": False,
+                "expiryNotification": False,
+                "ignoreTls": False,
+                "maxredirects": 10,
+                "method": "GET",
+                "invertKeyword": False,
+                "packetSize": 56,
+                "dns_resolve_type": "A",
+                "kafkaProducerSsl": False,
+                "kafkaProducerAllowAutoTopicCreation": False,
+                "grpcEnableTls": False,
+            },
+            parent_name=None,
+            notification_names=[],
+            user_tags=[],
+        )
+
+        k8s = _MockK8s([])
+        kuma = _MockKuma([])
+        store = _MockStore()
+        discovery = _MockDiscovery([discovered])
+
+        Reconciler(k8s=k8s, kuma=kuma, store=store, discovery=discovery).run_once()
+
+        assert len(kuma.created) == 1
+
+    def test_no_discovery_runner_works_normally(self):
+        """Reconciler with discovery=None behaves exactly as before."""
+        k8s = _MockK8s([_km("default", "svc")])
+        kuma = _MockKuma([])
+        store = _MockStore()
+
+        Reconciler(k8s=k8s, kuma=kuma, store=store, discovery=None).run_once()
+
+        assert len(kuma.created) == 1
+
+    def test_discovery_runner_exception_does_not_stop_crd_reconciliation(self):
+        """If discovery.run() raises, CRD-defined monitors are still reconciled."""
+
+        class _BrokenDiscovery:
+            def run(self):
+                raise RuntimeError("discovery exploded")
+
+        k8s = _MockK8s([_km("default", "svc")])
+        kuma = _MockKuma([])
+        store = _MockStore()
+
+        Reconciler(k8s=k8s, kuma=kuma, store=store, discovery=_BrokenDiscovery()).run_once()
+
+        assert len(kuma.created) == 1
+
+
+# ---------------------------------------------------------------------------
+# _split_key with discovered identity keys
+# ---------------------------------------------------------------------------
+
+
+class TestSplitKey:
+    def test_crd_key(self):
+        from src.services.reconciler import _split_key
+
+        assert _split_key("production/my-monitor") == ("production", "my-monitor")
+
+    def test_discovered_ingress_key(self):
+        from src.services.reconciler import _split_key
+
+        ns, name = _split_key("discovered:ingress:production/my-ingress/app.example.com")
+        assert ns == "production"
+        assert name == "ingress:my-ingress/app.example.com"
+
+    def test_discovered_group_key(self):
+        from src.services.reconciler import _split_key
+
+        ns, name = _split_key("discovered:group:production")
+        assert ns == "production"
+        assert name == "group"
+
+    def test_none_key(self):
+        from src.services.reconciler import _split_key
+
+        assert _split_key(None) == ("", "")
+
+    def test_key_without_slash(self):
+        from src.services.reconciler import _split_key
+
+        assert _split_key("nonamespace") == ("", "nonamespace")

@@ -1,6 +1,7 @@
 # RBAC for the Vector controller.
 # Grants the vector ServiceAccount read-only access to KumaMonitor resources
-# across all namespaces.  No write permissions are required in v1.
+# and — when discovery is enabled — to Namespaces, Ingresses, Services,
+# Deployments, and StatefulSets.  No write permissions are required in v1.
 ---
 apiVersion: v1
 kind: Namespace
@@ -24,6 +25,43 @@ rules:
       - vector.beejeex.github.io
     resources:
       - kumamonitors
+    verbs:
+      - get
+      - list
+      - watch
+  # Discovery: namespace opt-in annotation
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - list
+      - watch
+  # Discovery: Service port heuristics and database port detection
+  - apiGroups:
+      - ""
+    resources:
+      - services
+    verbs:
+      - get
+      - list
+      - watch
+  # Discovery: Ingress host rules
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - ingresses
+    verbs:
+      - get
+      - list
+      - watch
+  # Discovery: liveness/readiness probe extraction
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+      - statefulsets
     verbs:
       - get
       - list

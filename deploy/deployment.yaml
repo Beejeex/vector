@@ -28,7 +28,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: vector
-          image: ghcr.io/beejeex/vector:v0.0.8
+          image: ghcr.io/beejeex/vector:v0.0.9
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
@@ -58,6 +58,20 @@ spec:
               value: "INFO"
             - name: VECTOR_SQLITE_PATH
               value: "/data/vector.db"
+            # Discovery — set DISCOVERY_ENABLED to "true" and annotate namespaces to opt in.
+            # See README for full documentation.
+            - name: DISCOVERY_ENABLED
+              value: "false"
+            # - name: DISCOVERY_INGRESS
+            #   value: "true"
+            # - name: DISCOVERY_SERVICES
+            #   value: "true"
+            # - name: DISCOVERY_PROBES
+            #   value: "true"
+            # - name: DISCOVERY_DATABASES
+            #   value: "true"
+            # - name: DISCOVERY_INGRESS_DEFAULT_SCHEME
+            #   value: "https"
           volumeMounts:
             - name: data
               mountPath: /data

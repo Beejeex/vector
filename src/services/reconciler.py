@@ -12,6 +12,7 @@ from src.models.desired import (
 )
 from src.models.kuma import LiveMonitor
 from src.services.diff import compute_diff, payload_hash
+from src.services.discovery.runner import DiscoveryRunnerProtocol
 from src.services.kubernetes_client import KubernetesClientProtocol
 from src.services.kuma_client import KumaClientProtocol
 from src.services.ownership import find_parent_id, get_identity_key
@@ -26,15 +27,17 @@ class Reconciler:
         k8s: KubernetesClientProtocol,
         kuma: KumaClientProtocol,
         store: StoreProtocol,
+        discovery: Optional[DiscoveryRunnerProtocol] = None,
     ) -> None:
         self._k8s = k8s
         self._kuma = kuma
         self._store = store
+        self._discovery = discovery
 
     def run_once(self) -> None:
         logger.info("Reconciliation cycle started")
 
-        # 1. Read desired state from Kubernetes
+        # 1. Read desired state from Kubernetes CRDs
         k8s_monitors = self._k8s.list_monitors()
         desired_monitors: list[DesiredMonitor] = []
         for km in k8s_monitors:
@@ -45,7 +48,21 @@ class Reconciler:
                     "Skipping monitor — failed to build desired state",
                     extra={"namespace": km.namespace, "monitor_name": km.name, "error": str(exc)},
                 )
-        logger.info("Desired state ready", extra={"count": len(desired_monitors)})
+        logger.info("Desired state from CRDs", extra={"count": len(desired_monitors)})
+
+        # 1b. Merge in discovery-derived desired monitors (if enabled)
+        if self._discovery is not None:
+            try:
+                discovered = self._discovery.run()
+                desired_monitors.extend(discovered)
+                logger.info("Desired state from discovery", extra={"count": len(discovered)})
+            except Exception as exc:
+                logger.error(
+                    "Discovery run failed — continuing without discovered monitors",
+                    extra={"error": str(exc)},
+                    exc_info=True,
+                )
+        logger.info("Desired state total", extra={"count": len(desired_monitors)})
 
         # 2. Read current live state from Uptime Kuma
         live_monitors = self._kuma.list_monitors()
@@ -248,7 +265,22 @@ class Reconciler:
 
 
 def _split_key(key: Optional[str]) -> tuple[str, str]:
-    if not key or "/" not in key:
-        return ("", key or "")
+    """Extract (namespace, name) from a monitor identity key.
+
+    Handles both CRD keys ("<namespace>/<name>") and discovered keys
+    ("discovered:<source>:<namespace>[/<resource>/<detail>]").
+    """
+    if not key:
+        return ("", "")
+    if key.startswith("discovered:"):
+        # Format: discovered:<source>:<namespace>[/<resource>/<detail>]
+        parts = key.split(":", 2)
+        if len(parts) == 3:
+            source, path = parts[1], parts[2]
+            ns, sep, rest = path.partition("/")
+            name = f"{source}:{rest}" if sep else source
+            return ns, name
+    if "/" not in key:
+        return ("", key)
     ns, _, name = key.partition("/")
     return ns, name

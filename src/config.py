@@ -14,6 +14,12 @@ class Config:
     reconcile_interval: int
     sqlite_path: str
     log_level: str
+    discovery_enabled: bool
+    discovery_ingress: bool
+    discovery_services: bool
+    discovery_probes: bool
+    discovery_databases: bool
+    discovery_ingress_default_scheme: str  # "https" or "http" — used when ingress spec has no tls: entry
 
 
 def load_config() -> Config:
@@ -41,4 +47,10 @@ def load_config() -> Config:
         reconcile_interval=int(os.environ.get("RECONCILE_INTERVAL", "60")),
         sqlite_path=os.environ.get("VECTOR_SQLITE_PATH", "/data/vector.db"),
         log_level=os.environ.get("LOG_LEVEL", "INFO").upper(),
+        discovery_enabled=os.environ.get("DISCOVERY_ENABLED", "false").strip().lower() == "true",
+        discovery_ingress=os.environ.get("DISCOVERY_INGRESS", "true").strip().lower() != "false",
+        discovery_services=os.environ.get("DISCOVERY_SERVICES", "true").strip().lower() != "false",
+        discovery_probes=os.environ.get("DISCOVERY_PROBES", "true").strip().lower() != "false",
+        discovery_databases=os.environ.get("DISCOVERY_DATABASES", "true").strip().lower() != "false",
+        discovery_ingress_default_scheme=os.environ.get("DISCOVERY_INGRESS_DEFAULT_SCHEME", "https").strip().lower() or "https",
     )

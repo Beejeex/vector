@@ -131,3 +131,69 @@ class TestLoadConfigOptionalFields:
         self._set(monkeypatch, KUMA_URL="  http://kuma.example.com  ")
         cfg = load_config()
         assert cfg.kuma_url == "http://kuma.example.com"
+
+
+class TestLoadConfigDiscovery:
+    def _set(self, monkeypatch: pytest.MonkeyPatch, **kwargs: str) -> None:
+        for key in (
+            "KUMA_USERNAME", "KUMA_PASSWORD", "KUMA_API_TOKEN",
+            "DISCOVERY_ENABLED", "DISCOVERY_INGRESS", "DISCOVERY_SERVICES",
+            "DISCOVERY_PROBES", "DISCOVERY_DATABASES", "DISCOVERY_INGRESS_DEFAULT_SCHEME",
+        ):
+            monkeypatch.delenv(key, raising=False)
+        for key, val in _env(**kwargs).items():
+            monkeypatch.setenv(key, val)
+
+    def test_discovery_disabled_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._set(monkeypatch)
+        cfg = load_config()
+        assert cfg.discovery_enabled is False
+
+    def test_discovery_enabled_by_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._set(monkeypatch, DISCOVERY_ENABLED="true")
+        cfg = load_config()
+        assert cfg.discovery_enabled is True
+
+    def test_discovery_enabled_case_insensitive(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._set(monkeypatch, DISCOVERY_ENABLED="TRUE")
+        cfg = load_config()
+        assert cfg.discovery_enabled is True
+
+    def test_all_sources_enabled_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._set(monkeypatch, DISCOVERY_ENABLED="true")
+        cfg = load_config()
+        assert cfg.discovery_ingress is True
+        assert cfg.discovery_services is True
+        assert cfg.discovery_probes is True
+        assert cfg.discovery_databases is True
+
+    def test_individual_source_can_be_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._set(monkeypatch, DISCOVERY_ENABLED="true", DISCOVERY_INGRESS="false")
+        cfg = load_config()
+        assert cfg.discovery_ingress is False
+        assert cfg.discovery_services is True
+
+    def test_all_sources_can_be_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._set(
+            monkeypatch,
+            DISCOVERY_ENABLED="true",
+            DISCOVERY_INGRESS="false",
+            DISCOVERY_SERVICES="false",
+            DISCOVERY_PROBES="false",
+            DISCOVERY_DATABASES="false",
+        )
+        cfg = load_config()
+        assert cfg.discovery_ingress is False
+        assert cfg.discovery_services is False
+        assert cfg.discovery_probes is False
+        assert cfg.discovery_databases is False
+
+    def test_ingress_default_scheme_is_https(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._set(monkeypatch)
+        cfg = load_config()
+        assert cfg.discovery_ingress_default_scheme == "https"
+
+    def test_ingress_default_scheme_can_be_set_to_http(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._set(monkeypatch, DISCOVERY_INGRESS_DEFAULT_SCHEME="http")
+        cfg = load_config()
+        assert cfg.discovery_ingress_default_scheme == "http"
