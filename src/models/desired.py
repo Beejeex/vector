@@ -47,7 +47,6 @@ def build_desired(monitor: KumaMonitor) -> DesiredMonitor:
         "retryInterval": spec.retry_interval,
         "resendInterval": spec.resend_interval,
         "maxretries": spec.retries,
-        "active": spec.enabled,
         "maintenance": spec.maintenance,
         "upsideDown": spec.upside_down,
         "expiryNotification": spec.expiry_notification,

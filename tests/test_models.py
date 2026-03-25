@@ -33,13 +33,15 @@ class TestBuildDesired:
         assert d.payload["interval"] == 60
         assert d.payload["timeout"] == 30
         assert d.payload["maxretries"] == 1
-        assert d.payload["active"] is True
+        assert "active" not in d.payload  # active state not sent to add_monitor
         assert d.payload["ignoreTls"] is False
 
     def test_enabled_maps_to_active(self):
+        # enabled=False has no effect on the payload — the uptime-kuma-api library
+        # does not accept 'active' in add_monitor; pause/resume are separate calls.
         m = _make_monitor(enabled=False)
         d = build_desired(m)
-        assert d.payload["active"] is False
+        assert "active" not in d.payload
 
     def test_retries_maps_to_maxretries(self):
         m = _make_monitor(retries=5)

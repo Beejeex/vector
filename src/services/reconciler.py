@@ -90,9 +90,9 @@ class Reconciler:
         logger.info(
             "Reconciliation cycle complete",
             extra={
-                "created": len(diff.to_create),
-                "updated": len(diff.to_update),
-                "deleted": len(diff.to_delete),
+                "num_created": len(diff.to_create),
+                "num_updated": len(diff.to_update),
+                "num_deleted": len(diff.to_delete),
             },
         )
 
