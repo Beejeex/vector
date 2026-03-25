@@ -4,6 +4,7 @@ import logging
 
 from src.models.desired import DesiredMonitor
 from src.services.discovery.base import (
+    DiscoveredService,
     DiscoveryK8sClientProtocol,
     default_payload,
     make_identity_key,
@@ -14,10 +15,22 @@ logger = logging.getLogger(__name__)
 _SOURCE = "probe"
 
 
+def _find_service_for_workload(
+    pod_labels: dict[str, str],
+    services: list[DiscoveredService],
+) -> str | None:
+    """Return the name of the first service whose non-empty selector is a subset of pod_labels."""
+    for svc in services:
+        if svc.selector and all(pod_labels.get(k) == v for k, v in svc.selector.items()):
+            return svc.name
+    return None
+
+
 class ProbeDiscovery:
     """Produces HTTP monitors derived from liveness/readiness probes on Deployments and StatefulSets.
 
-    Uses the workload name as the assumed service hostname (convention-based).
+    Resolves the in-cluster hostname by matching the workload's pod template labels against
+    service selectors. Falls back to the workload name if no service is found.
     Only numeric ports are supported; named ports are skipped.
     """
 
@@ -25,9 +38,19 @@ class ProbeDiscovery:
         self._k8s = k8s
 
     def discover(self, namespace: str, group_name: str) -> list[DesiredMonitor]:
+        services = self._k8s.list_services(namespace)
         monitors: list[DesiredMonitor] = []
         for workload in self._k8s.list_workloads(namespace):
-            hostname = f"{workload.name}.{namespace}.svc.cluster.local"
+            svc_name = _find_service_for_workload(workload.pod_labels, services)
+            if svc_name:
+                hostname = f"{svc_name}.{namespace}.svc.cluster.local"
+            else:
+                hostname = f"{workload.name}.{namespace}.svc.cluster.local"
+                if workload.probes:
+                    logger.warning(
+                        "No matching service for workload probes, using workload name as hostname",
+                        extra={"namespace": namespace, "workload": workload.name},
+                    )
             for container_probes in workload.probes:
                 # Prefer liveness over readiness when both are present on the same container.
                 probe = container_probes.liveness or container_probes.readiness

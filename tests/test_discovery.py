@@ -196,6 +196,27 @@ class TestServicePortDiscovery:
         monitors = ServicePortDiscovery(self._k8s("default", [svc])).discover("default", "G")
         assert monitors[0].payload["url"] == "https://my-app.default.svc.cluster.local:8443"
 
+    def test_https_port_sets_ignore_tls(self) -> None:
+        """Internal cluster HTTPS services commonly use self-signed certs."""
+        svc = DiscoveredService(
+            name="authentik-server",
+            namespace="authentik",
+            cluster_ip="10.43.0.1",
+            ports=[ServicePort(name="https", port=443, protocol="TCP")],
+        )
+        monitors = ServicePortDiscovery(self._k8s("authentik", [svc])).discover("authentik", "G")
+        assert monitors[0].payload.get("ignoreTls") is True
+
+    def test_http_port_does_not_set_ignore_tls(self) -> None:
+        svc = DiscoveredService(
+            name="my-app",
+            namespace="default",
+            cluster_ip="10.0.0.1",
+            ports=[ServicePort(name="http", port=8080, protocol="TCP")],
+        )
+        monitors = ServicePortDiscovery(self._k8s("default", [svc])).discover("default", "G")
+        assert not monitors[0].payload.get("ignoreTls")
+
     def test_http_prefix_port_name_matches(self) -> None:
         """Real-world: Prometheus uses http-web, http-metrics port names."""
         svc = DiscoveredService(
@@ -222,6 +243,41 @@ class TestServicePortDiscovery:
         monitors = ServicePortDiscovery(self._k8s("prometheus", [svc])).discover("prometheus", "G")
         assert len(monitors) == 1
         assert ":9100" in monitors[0].payload["url"]
+
+    def test_metrics_port_appends_metrics_path(self) -> None:
+        """Ports named 'metrics' or 'http-metrics' serve at /metrics, not /."""
+        svc = DiscoveredService(
+            name="authentik-server-metrics",
+            namespace="authentik",
+            cluster_ip="10.43.0.2",
+            ports=[ServicePort(name="metrics", port=9300, protocol="TCP")],
+        )
+        monitors = ServicePortDiscovery(self._k8s("authentik", [svc])).discover("authentik", "G")
+        assert monitors[0].payload["url"].endswith("/metrics")
+
+    def test_http_metrics_port_appends_metrics_path(self) -> None:
+        """http-metrics port name (Prometheus convention) also gets /metrics path."""
+        svc = DiscoveredService(
+            name="node-exporter",
+            namespace="prometheus",
+            cluster_ip="10.43.0.3",
+            ports=[ServicePort(name="http-metrics", port=9100, protocol="TCP")],
+        )
+        monitors = ServicePortDiscovery(self._k8s("prometheus", [svc])).discover("prometheus", "G")
+        assert monitors[0].payload["url"].endswith("/metrics")
+
+    def test_non_metrics_port_has_no_path(self) -> None:
+        svc = DiscoveredService(
+            name="my-app",
+            namespace="default",
+            cluster_ip="10.0.0.1",
+            ports=[ServicePort(name="http", port=8080, protocol="TCP")],
+        )
+        monitors = ServicePortDiscovery(self._k8s("default", [svc])).discover("default", "G")
+        url = monitors[0].payload["url"]
+        assert not url.endswith("/metrics")
+        # URL should end with port, no path
+        assert url == "http://my-app.default.svc.cluster.local:8080"
 
     def test_unknown_port_name_is_skipped(self) -> None:
         svc = DiscoveredService(
@@ -344,6 +400,60 @@ class TestProbeDiscovery:
         workload = DiscoveredWorkload(name="svc", namespace="ns", probes=[])
         monitors = ProbeDiscovery(self._k8s("ns", [workload])).discover("ns", "G")
         assert monitors == []
+
+    def test_uses_service_name_when_selector_matches(self) -> None:
+        """Real-world: deployment 'tracearr' has service 'svc-tracearr' with matching selector."""
+        workload = DiscoveredWorkload(
+            name="tracearr",
+            namespace="tracearr",
+            probes=[ContainerProbes(
+                container_name="app",
+                liveness=HttpProbeInfo(path="/healthz", port=8080, scheme="HTTP"),
+                readiness=None,
+            )],
+            pod_labels={"app": "tracearr", "version": "1.0"},
+        )
+        svc = DiscoveredService(
+            name="svc-tracearr",
+            namespace="tracearr",
+            cluster_ip="10.43.151.231",
+            ports=[ServicePort(name="http", port=80, protocol="TCP")],
+            selector={"app": "tracearr"},
+        )
+        k8s = _MockDiscoveryK8s(
+            workloads={"tracearr": [workload]},
+            services={"tracearr": [svc]},
+        )
+        monitors = ProbeDiscovery(k8s).discover("tracearr", "G")
+        assert len(monitors) == 1
+        assert "svc-tracearr.tracearr.svc.cluster.local" in monitors[0].payload["url"]
+
+    def test_falls_back_to_workload_name_when_no_service_matches(self) -> None:
+        """When no service selector matches, the workload name is used as hostname."""
+        workload = DiscoveredWorkload(
+            name="my-app",
+            namespace="default",
+            probes=[ContainerProbes(
+                container_name="c",
+                liveness=HttpProbeInfo(path="/health", port=8080, scheme="HTTP"),
+                readiness=None,
+            )],
+            pod_labels={"app": "my-app"},
+        )
+        unrelated_svc = DiscoveredService(
+            name="other-svc",
+            namespace="default",
+            cluster_ip="10.0.0.1",
+            ports=[ServicePort(name="http", port=80, protocol="TCP")],
+            selector={"app": "other-app"},  # does not match
+        )
+        k8s = _MockDiscoveryK8s(
+            workloads={"default": [workload]},
+            services={"default": [unrelated_svc]},
+        )
+        monitors = ProbeDiscovery(k8s).discover("default", "G")
+        assert len(monitors) == 1
+        assert "my-app.default.svc.cluster.local" in monitors[0].payload["url"]
 
 
 # ---------------------------------------------------------------------------

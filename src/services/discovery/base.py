@@ -87,6 +87,7 @@ class DiscoveredService:
     namespace: str
     cluster_ip: str
     ports: list[ServicePort] = field(default_factory=list)
+    selector: dict[str, str] = field(default_factory=dict)  # label selector used to match pods
 
 
 @dataclass
@@ -109,6 +110,7 @@ class DiscoveredWorkload:
     name: str
     namespace: str
     probes: list[ContainerProbes] = field(default_factory=list)
+    pod_labels: dict[str, str] = field(default_factory=dict)  # pod template labels for service matching
 
 
 # ---------------------------------------------------------------------------

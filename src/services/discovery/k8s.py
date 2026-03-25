@@ -135,6 +135,8 @@ class DiscoveryK8sClient:
                 if port_number:
                     ports.append(ServicePort(name=port_name, port=port_number, protocol=protocol))
 
+            selector: dict[str, str] = dict(spec.selector or {})
+
             if ports:
                 services.append(
                     DiscoveredService(
@@ -142,6 +144,7 @@ class DiscoveryK8sClient:
                         namespace=namespace,
                         cluster_ip=cluster_ip,
                         ports=ports,
+                        selector=selector,
                     )
                 )
 
@@ -190,6 +193,10 @@ class DiscoveryK8sClient:
         pod_spec = getattr(template, "spec", None) if template else None
         containers = getattr(pod_spec, "containers", None) or []
 
+        # Extract pod template labels so probe discovery can match services by selector.
+        pod_template_metadata = getattr(template, "metadata", None) if template else None
+        pod_labels: dict[str, str] = dict(getattr(pod_template_metadata, "labels", None) or {})
+
         for container in containers:
             liveness = _extract_http_probe(getattr(container, "liveness_probe", None))
             readiness = _extract_http_probe(getattr(container, "readiness_probe", None))
@@ -202,7 +209,7 @@ class DiscoveryK8sClient:
                     )
                 )
 
-        return DiscoveredWorkload(name=name, namespace=namespace, probes=probes)
+        return DiscoveredWorkload(name=name, namespace=namespace, probes=probes, pod_labels=pod_labels)
 
 
 def _extract_http_probe(probe: Optional[object]) -> Optional[HttpProbeInfo]:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from src.models.desired import DesiredMonitor
 from src.services.discovery.base import (
@@ -38,6 +39,12 @@ def _is_https_port(port_name: str) -> bool:
     return port_name.lower() in _HTTPS_PORT_NAMES or port_name.lower().startswith("https-")
 
 
+def _is_metrics_port(port_name: str) -> bool:
+    """Return True for ports that serve Prometheus metrics at /metrics rather than / ."""
+    name = port_name.lower()
+    return name == "metrics" or name.endswith("-metrics")
+
+
 class ServicePortDiscovery:
     """Produces HTTP monitors for Services with well-known HTTP port names."""
 
@@ -53,10 +60,15 @@ class ServicePortDiscovery:
 
                 scheme = "https" if _is_https_port(port.name or "") else "http"
                 hostname = f"{svc.name}.{namespace}.svc.cluster.local"
-                url = f"{scheme}://{hostname}:{port.port}"
+                path = "/metrics" if _is_metrics_port(port.name or "") else ""
+                url = f"{scheme}://{hostname}:{port.port}{path}"
                 detail = port.name or str(port.port)
                 key = make_identity_key(_SOURCE, namespace, svc.name, detail)
                 display_name = f"{svc.name}-{detail}"
+
+                extra_fields: dict[str, Any] = {}
+                if scheme == "https":
+                    extra_fields["ignoreTls"] = True
 
                 monitors.append(
                     DesiredMonitor(
@@ -66,6 +78,7 @@ class ServicePortDiscovery:
                             display_name,
                             url=url,
                             description=f"Discovered from Service {namespace}/{svc.name} port {detail}",
+                            **extra_fields,
                         ),
                         parent_name=group_name,
                         notification_names=[],
