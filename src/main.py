@@ -14,6 +14,14 @@ from src.services.store import SQLiteStore
 logger = logging.getLogger(__name__)
 
 
+def _auth_mode(cfg) -> str:  # type: ignore[no-untyped-def]
+    if cfg.kuma_api_token:
+        return "api-token"
+    if cfg.kuma_username:
+        return "username-password"
+    return "auth-disabled"
+
+
 def main() -> None:
     try:
         cfg = load_config()
@@ -24,10 +32,27 @@ def main() -> None:
     setup_logging(cfg.log_level)
     logger.info(
         "Vector starting",
-        extra={"kuma_url": cfg.kuma_url, "reconcile_interval": cfg.reconcile_interval},
+        extra={
+            "kuma_url": cfg.kuma_url,
+            "auth_mode": _auth_mode(cfg),
+            "reconcile_interval": cfg.reconcile_interval,
+            "sqlite_path": cfg.sqlite_path,
+            "log_level": cfg.log_level,
+        },
     )
 
     k8s = KubernetesClient()
+
+    logger.info("Checking Kubernetes RBAC permissions")
+    if not k8s.check_permissions():
+        logger.error(
+            "One or more required Kubernetes permissions are missing. "
+            "Apply deploy/rbac.yaml and ensure the ServiceAccount is correct. "
+            "Vector will continue but reconciliation may fail."
+        )
+    else:
+        logger.info("Kubernetes RBAC permissions OK")
+
     store = SQLiteStore(cfg.sqlite_path)
 
     while True:
@@ -36,7 +61,11 @@ def main() -> None:
             kuma.connect()
             Reconciler(k8s=k8s, kuma=kuma, store=store).run_once()
         except Exception as exc:
-            logger.error("Reconciliation cycle failed", extra={"error": str(exc)})
+            logger.error(
+                "Reconciliation cycle failed",
+                extra={"error": str(exc)},
+                exc_info=True,
+            )
         finally:
             kuma.disconnect()
 

@@ -183,6 +183,7 @@ class Reconciler:
             logger.error(
                 "Failed to create monitor",
                 extra={"namespace": namespace, "monitor_name": name, "error": str(exc)},
+                exc_info=True,
             )
             return None
 
@@ -220,6 +221,7 @@ class Reconciler:
             logger.error(
                 "Failed to update monitor",
                 extra={"namespace": namespace, "monitor_name": name, "monitor_id": monitor_id, "error": str(exc)},
+                exc_info=True,
             )
 
     def _delete(self, monitor_id: int, live_monitors: list[LiveMonitor]) -> None:
@@ -241,6 +243,7 @@ class Reconciler:
             logger.error(
                 "Failed to delete monitor",
                 extra={"namespace": namespace, "monitor_name": name, "monitor_id": monitor_id, "error": str(exc)},
+                exc_info=True,
             )
 
 

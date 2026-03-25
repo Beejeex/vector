@@ -15,6 +15,9 @@ CRD_GROUP = "vector.beejeex.github.io"
 CRD_VERSION = "v1alpha1"
 CRD_PLURAL = "kumamonitors"
 
+# Verbs the controller requires on the KumaMonitor CRD.
+_REQUIRED_VERBS = ("get", "list", "watch")
+
 
 class KubernetesClientProtocol(Protocol):
     def list_monitors(self) -> list[KumaMonitor]: ...
@@ -31,6 +34,45 @@ class KubernetesClient:
             config.load_kube_config()
             logger.debug("Loaded local kubeconfig (development)")
         self._api = client.CustomObjectsApi()
+        self._authz_api = client.AuthorizationV1Api()
+
+    def check_permissions(self) -> bool:
+        """
+        Use SelfSubjectAccessReview to verify the controller has the required
+        verbs on the KumaMonitor CRD. Logs a warning for each missing permission.
+        Returns True if all required permissions are present, False otherwise.
+        """
+        all_ok = True
+        for verb in _REQUIRED_VERBS:
+            review = client.V1SelfSubjectAccessReview(
+                spec=client.V1SelfSubjectAccessReviewSpec(
+                    resource_attributes=client.V1ResourceAttributes(
+                        group=CRD_GROUP,
+                        resource=CRD_PLURAL,
+                        verb=verb,
+                    )
+                )
+            )
+            try:
+                result = self._authz_api.create_self_subject_access_review(review)
+                allowed = result.status.allowed if result.status else False
+            except ApiException as exc:
+                logger.warning(
+                    "Could not check permission — SelfSubjectAccessReview failed",
+                    extra={"verb": verb, "status": exc.status, "reason": exc.reason},
+                )
+                allowed = False
+
+            if allowed:
+                logger.debug("Permission check passed", extra={"verb": verb, "resource": CRD_PLURAL})
+            else:
+                logger.warning(
+                    "Permission check FAILED — controller may not work correctly",
+                    extra={"verb": verb, "resource": CRD_PLURAL, "group": CRD_GROUP},
+                )
+                all_ok = False
+
+        return all_ok
 
     def list_monitors(self) -> list[KumaMonitor]:
         monitors: list[KumaMonitor] = []
