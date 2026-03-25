@@ -47,11 +47,9 @@ def build_desired(monitor: KumaMonitor) -> DesiredMonitor:
         "retryInterval": spec.retry_interval,
         "resendInterval": spec.resend_interval,
         "maxretries": spec.retries,
-        "maintenance": spec.maintenance,
         "upsideDown": spec.upside_down,
         "expiryNotification": spec.expiry_notification,
         "ignoreTls": spec.ignore_tls,
-        "cacheBust": spec.cache_bust,
         "maxredirects": spec.max_redirects,
         "method": spec.method,
         "invertKeyword": spec.invert_keyword,
@@ -64,7 +62,6 @@ def build_desired(monitor: KumaMonitor) -> DesiredMonitor:
 
     _set_if(payload, "url", spec.url)
     _set_if(payload, "description", spec.description)
-    _set_if(payload, "ipFamily", spec.ip_family)
     _set_if(payload, "authMethod", spec.auth_method)
     _set_if(payload, "basic_auth_user", spec.basic_auth_user)
     _set_if(payload, "basic_auth_pass", spec.basic_auth_pass)
@@ -74,35 +71,33 @@ def build_desired(monitor: KumaMonitor) -> DesiredMonitor:
     _set_if(payload, "oauth_client_secret", spec.oauth_client_secret)
     _set_if(payload, "oauth_token_url", spec.oauth_token_url)
     _set_if(payload, "oauth_scopes", spec.oauth_scopes)
-    _set_if(payload, "oauth_audience", spec.oauth_audience)
     _set_if(payload, "oauth_auth_method", spec.oauth_auth_method)
     _set_if(payload, "tlsCert", spec.tls_cert)
     _set_if(payload, "tlsKey", spec.tls_key)
     _set_if(payload, "tlsCa", spec.tls_ca)
     _set_if(payload, "keyword", spec.keyword)
-    _set_if(payload, "json_path", spec.json_path)
-    _set_if(payload, "jsonPathOperator", spec.json_path_operator)
-    _set_if(payload, "expected_value", spec.expected_value)
+    _set_if(payload, "jsonPath", spec.json_path)
+    _set_if(payload, "expectedValue", spec.expected_value)
     _set_if(payload, "hostname", spec.hostname)
     _set_if(payload, "port", spec.port)
     _set_if(payload, "dns_resolve_server", spec.dns_resolve_server)
     _set_if(payload, "docker_container", spec.docker_container)
     _set_if(payload, "docker_host", spec.docker_host)
-    _set_if(payload, "mqtt_topic", spec.mqtt_topic)
-    _set_if(payload, "mqtt_username", spec.mqtt_username)
-    _set_if(payload, "mqtt_password", spec.mqtt_password)
-    _set_if(payload, "mqtt_success_message", spec.mqtt_success_message)
-    _set_if(payload, "database_connection_string", spec.database_connection_string)
-    _set_if(payload, "database_query", spec.database_query)
-    _set_if(payload, "kafka_producer_brokers", spec.kafka_producer_brokers)
-    _set_if(payload, "kafka_producer_topic", spec.kafka_producer_topic)
-    _set_if(payload, "kafka_producer_message", spec.kafka_producer_message)
-    _set_if(payload, "grpc_url", spec.grpc_url)
-    _set_if(payload, "grpc_protobuf", spec.grpc_protobuf)
-    _set_if(payload, "grpc_body", spec.grpc_body)
-    _set_if(payload, "grpc_metadata", spec.grpc_metadata)
-    _set_if(payload, "grpc_method", spec.grpc_method)
-    _set_if(payload, "grpc_service_name", spec.grpc_service_name)
+    _set_if(payload, "mqttTopic", spec.mqtt_topic)
+    _set_if(payload, "mqttUsername", spec.mqtt_username)
+    _set_if(payload, "mqttPassword", spec.mqtt_password)
+    _set_if(payload, "mqttSuccessMessage", spec.mqtt_success_message)
+    _set_if(payload, "databaseConnectionString", spec.database_connection_string)
+    _set_if(payload, "databaseQuery", spec.database_query)
+    _set_if(payload, "kafkaProducerBrokers", spec.kafka_producer_brokers)
+    _set_if(payload, "kafkaProducerTopic", spec.kafka_producer_topic)
+    _set_if(payload, "kafkaProducerMessage", spec.kafka_producer_message)
+    _set_if(payload, "grpcUrl", spec.grpc_url)
+    _set_if(payload, "grpcProtobuf", spec.grpc_protobuf)
+    _set_if(payload, "grpcBody", spec.grpc_body)
+    _set_if(payload, "grpcMetadata", spec.grpc_metadata)
+    _set_if(payload, "grpcMethod", spec.grpc_method)
+    _set_if(payload, "grpcServiceName", spec.grpc_service_name)
     _set_if(payload, "radiusUsername", spec.radius_username)
     _set_if(payload, "radiusPassword", spec.radius_password)
     _set_if(payload, "radiusCalledStationId", spec.radius_called_station_id)

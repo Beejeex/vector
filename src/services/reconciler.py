@@ -139,7 +139,7 @@ class Reconciler:
                         extra={"notification_name": n_name, "key": desired.identity_key},
                     )
             if notif_ids:
-                payload["notification_id_list"] = notif_ids
+                payload["notificationIDList"] = notif_ids
 
         return payload
 

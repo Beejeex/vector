@@ -15,24 +15,27 @@ logger = logging.getLogger(__name__)
 # Kuma API field names that Vector actively manages.
 # Only these are compared when deciding whether an update is needed.
 # Fields not in this set (e.g. internal Kuma state, heartbeat data) are ignored.
+# These must match the exact names returned by Uptime Kuma in live monitor data.
 _OWNED_FIELDS: frozenset[str] = frozenset({
     "type", "name", "url", "interval", "timeout", "retryInterval",
-    "resendInterval", "maxretries", "active", "maintenance", "upsideDown",
-    "expiryNotification", "ignoreTls", "cacheBust", "maxredirects", "method",
+    "resendInterval", "maxretries", "upsideDown",
+    "expiryNotification", "ignoreTls", "maxredirects", "method",
     "invertKeyword", "packetSize", "dns_resolve_type", "kafkaProducerSsl",
     "kafkaProducerAllowAutoTopicCreation", "grpcEnableTls",
-    "ipFamily", "authMethod", "basic_auth_user", "authDomain", "authWorkstation",
-    "oauth_client_id", "oauth_token_url", "oauth_scopes", "oauth_audience",
+    "authMethod", "basic_auth_user", "authDomain", "authWorkstation",
+    "oauth_client_id", "oauth_token_url", "oauth_scopes",
     "oauth_auth_method", "tlsCert", "tlsKey", "tlsCa",
-    "keyword", "json_path", "jsonPathOperator", "expected_value",
+    "keyword", "jsonPath", "expectedValue",
     "hostname", "port", "dns_resolve_server", "docker_container", "docker_host",
-    "mqtt_topic", "mqtt_username", "mqtt_success_message",
-    "database_connection_string", "database_query",
-    "kafka_producer_brokers", "kafka_producer_topic", "kafka_producer_message",
-    "grpc_url", "grpc_protobuf", "grpc_body", "grpc_metadata",
-    "grpc_method", "grpc_service_name",
-    "radiusUsername", "radiusCalledStationId", "radiusCallingStationId",
+    "mqttTopic", "mqttUsername", "mqttPassword", "mqttSuccessMessage",
+    "databaseConnectionString", "databaseQuery",
+    "kafkaProducerBrokers", "kafkaProducerTopic", "kafkaProducerMessage",
+    "grpcUrl", "grpcProtobuf", "grpcBody", "grpcMetadata",
+    "grpcMethod", "grpcServiceName",
+    "radiusUsername", "radiusPassword", "radiusSecret",
+    "radiusCalledStationId", "radiusCallingStationId",
     "accepted_statuscodes", "headers", "body", "httpBodyEncoding", "description",
+    "notificationIDList",
 })
 
 

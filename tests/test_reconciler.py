@@ -344,11 +344,11 @@ class TestReconcilerNotifications:
         Reconciler(k8s=k8s, kuma=kuma, store=store).run_once()
 
         payload = kuma.created[0]
-        assert "notification_id_list" in payload
-        assert payload["notification_id_list"] == {"7": True}
+        assert "notificationIDList" in payload
+        assert payload["notificationIDList"] == {"7": True}
 
     def test_unknown_notification_name_omitted_from_payload(self):
-        """An unresolvable notification name should not crash; payload has no notification_id_list."""
+        """An unresolvable notification name should not crash; payload has no notificationIDList."""
         spec = KumaMonitorSpec(
             name="api", type="http", url="https://example.com", notification_names=["nonexistent"]
         )
@@ -360,7 +360,7 @@ class TestReconcilerNotifications:
         Reconciler(k8s=k8s, kuma=kuma, store=store).run_once()
 
         assert len(kuma.created) == 1
-        assert "notification_id_list" not in kuma.created[0]
+        assert "notificationIDList" not in kuma.created[0]
 
 
 class TestReconcilerParentResolution:
