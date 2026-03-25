@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+from unittest.mock import patch
 
 from src.models.desired import DesiredMonitor
 from src.services.discovery.base import (
@@ -23,6 +24,7 @@ from src.services.discovery.ingress import IngressDiscovery
 from src.services.discovery.probe import ProbeDiscovery
 from src.services.discovery.runner import DiscoveryRunner, _make_group_monitor
 from src.services.discovery.service import ServicePortDiscovery
+from src.services.discovery.validator import EndpointValidator, NullValidator, _endpoint_for_monitor
 
 
 # ---------------------------------------------------------------------------
@@ -408,16 +410,16 @@ class TestProbeDiscovery:
             namespace="tracearr",
             probes=[ContainerProbes(
                 container_name="app",
-                liveness=HttpProbeInfo(path="/healthz", port=8080, scheme="HTTP"),
+                liveness=HttpProbeInfo(path="/", port=3000, scheme="HTTP"),
                 readiness=None,
             )],
-            pod_labels={"app": "tracearr", "version": "1.0"},
+            pod_labels={"app": "tracearr"},
         )
         svc = DiscoveredService(
             name="svc-tracearr",
             namespace="tracearr",
             cluster_ip="10.43.151.231",
-            ports=[ServicePort(name="http", port=80, protocol="TCP")],
+            ports=[ServicePort(name="http", port=80, protocol="TCP", target_port=3000)],
             selector={"app": "tracearr"},
         )
         k8s = _MockDiscoveryK8s(
@@ -427,6 +429,38 @@ class TestProbeDiscovery:
         monitors = ProbeDiscovery(k8s).discover("tracearr", "G")
         assert len(monitors) == 1
         assert "svc-tracearr.tracearr.svc.cluster.local" in monitors[0].payload["url"]
+
+    def test_probe_uses_service_port_not_container_port(self) -> None:
+        """Real-world: headlamp probe port 4466 → service port 80.
+        Uptime Kuma must connect to the service port, not the container port."""
+        workload = DiscoveredWorkload(
+            name="headlamp",
+            namespace="headlamp-system",
+            probes=[ContainerProbes(
+                container_name="headlamp",
+                liveness=HttpProbeInfo(path="/", port=4466, scheme="HTTP"),
+                readiness=None,
+            )],
+            pod_labels={"app.kubernetes.io/name": "headlamp"},
+        )
+        svc = DiscoveredService(
+            name="svc-headlamp",
+            namespace="headlamp-system",
+            cluster_ip="10.43.8.199",
+            ports=[ServicePort(name="http", port=80, protocol="TCP", target_port=4466)],
+            selector={"app.kubernetes.io/name": "headlamp"},
+        )
+        k8s = _MockDiscoveryK8s(
+            workloads={"headlamp-system": [workload]},
+            services={"headlamp-system": [svc]},
+        )
+        monitors = ProbeDiscovery(k8s).discover("headlamp-system", "G")
+        assert len(monitors) == 1
+        url = monitors[0].payload["url"]
+        assert "svc-headlamp.headlamp-system.svc.cluster.local" in url
+        # Must use service port 80, not container port 4466
+        assert ":80/" in url
+        assert "4466" not in url
 
     def test_falls_back_to_workload_name_when_no_service_matches(self) -> None:
         """When no service selector matches, the workload name is used as hostname."""
@@ -624,3 +658,169 @@ class TestMakeGroupMonitor:
         assert m.parent_name is None
         assert m.notification_names == []
         assert m.user_tags == []
+
+
+# ---------------------------------------------------------------------------
+# EndpointValidator
+# ---------------------------------------------------------------------------
+
+def _http_monitor(url: str) -> DesiredMonitor:
+    return DesiredMonitor(
+        identity_key="discovered:ingress:ns/ing/host",
+        payload={"type": "http", "name": "test", "url": url},
+        parent_name="G",
+        notification_names=[],
+        user_tags=[],
+    )
+
+
+def _port_monitor(hostname: str, port: int) -> DesiredMonitor:
+    return DesiredMonitor(
+        identity_key="discovered:database:ns/svc/5432",
+        payload={"type": "port", "name": "test", "hostname": hostname, "port": port},
+        parent_name="G",
+        notification_names=[],
+        user_tags=[],
+    )
+
+
+def _group_monitor() -> DesiredMonitor:
+    return DesiredMonitor(
+        identity_key="discovered:group:ns",
+        payload={"type": "group", "name": "NS"},
+        parent_name=None,
+        notification_names=[],
+        user_tags=[],
+    )
+
+
+class TestEndpointForMonitor:
+    def test_http_url_with_explicit_port(self) -> None:
+        m = _http_monitor("http://svc.ns.svc.cluster.local:8080/health")
+        assert _endpoint_for_monitor(m) == ("svc.ns.svc.cluster.local", 8080)
+
+    def test_http_url_default_port_80(self) -> None:
+        m = _http_monitor("http://app.example.com")
+        assert _endpoint_for_monitor(m) == ("app.example.com", 80)
+
+    def test_https_url_default_port_443(self) -> None:
+        m = _http_monitor("https://app.example.com")
+        assert _endpoint_for_monitor(m) == ("app.example.com", 443)
+
+    def test_port_monitor_returns_hostname_and_port(self) -> None:
+        m = _port_monitor("pg.ns.svc.cluster.local", 5432)
+        assert _endpoint_for_monitor(m) == ("pg.ns.svc.cluster.local", 5432)
+
+    def test_group_monitor_returns_none(self) -> None:
+        assert _endpoint_for_monitor(_group_monitor()) is None
+
+    def test_http_monitor_with_no_url_returns_none(self) -> None:
+        m = DesiredMonitor(
+            identity_key="k",
+            payload={"type": "http", "name": "t", "url": ""},
+            parent_name=None,
+            notification_names=[],
+            user_tags=[],
+        )
+        assert _endpoint_for_monitor(m) is None
+
+
+class TestEndpointValidator:
+    def test_reachable_endpoint_accepted(self) -> None:
+        v = EndpointValidator(timeout_sec=1.0)
+        with patch("src.services.discovery.validator._tcp_connect", return_value=True):
+            assert v.is_reachable(_http_monitor("http://svc.ns.svc.cluster.local:8080")) is True
+
+    def test_unreachable_endpoint_rejected(self) -> None:
+        v = EndpointValidator(timeout_sec=1.0)
+        with patch("src.services.discovery.validator._tcp_connect", return_value=False):
+            assert v.is_reachable(_http_monitor("http://dead.ns.svc.cluster.local:8080")) is False
+
+    def test_group_monitor_always_accepted(self) -> None:
+        v = EndpointValidator(timeout_sec=1.0)
+        # No TCP call should be made for group monitors.
+        with patch("src.services.discovery.validator._tcp_connect", side_effect=AssertionError("should not call")):
+            assert v.is_reachable(_group_monitor()) is True
+
+    def test_port_monitor_validated_by_tcp(self) -> None:
+        v = EndpointValidator(timeout_sec=1.0)
+        with patch("src.services.discovery.validator._tcp_connect", return_value=True) as mock_tcp:
+            assert v.is_reachable(_port_monitor("pg.ns.svc.cluster.local", 5432)) is True
+            mock_tcp.assert_called_once_with("pg.ns.svc.cluster.local", 5432, 1.0)
+
+
+class TestNullValidator:
+    def test_always_returns_true(self) -> None:
+        v = NullValidator()
+        assert v.is_reachable(_http_monitor("http://anything:9999")) is True
+        assert v.is_reachable(_group_monitor()) is True
+
+
+class TestDiscoveryRunnerWithValidator:
+    def _make_monitor(self, key: str, url: str, group: str) -> DesiredMonitor:
+        return DesiredMonitor(
+            identity_key=key,
+            payload={"type": "http", "name": key, "url": url},
+            parent_name=group,
+            notification_names=[],
+            user_tags=[],
+        )
+
+    def test_unreachable_monitors_filtered_out(self) -> None:
+        class _Source:
+            def discover(self, namespace: str, group_name: str) -> list[DesiredMonitor]:
+                return [
+                    DesiredMonitor(
+                        identity_key=f"discovered:ingress:{namespace}/ing/good.example.com",
+                        payload={"type": "http", "name": "good", "url": "http://good.example.com"},
+                        parent_name=group_name, notification_names=[], user_tags=[],
+                    ),
+                    DesiredMonitor(
+                        identity_key=f"discovered:ingress:{namespace}/ing/dead.example.com",
+                        payload={"type": "http", "name": "dead", "url": "http://dead.example.com"},
+                        parent_name=group_name, notification_names=[], user_tags=[],
+                    ),
+                ]
+
+        class _Validator:
+            def is_reachable(self, monitor: DesiredMonitor) -> bool:
+                return "good" in monitor.payload.get("url", "")
+
+        k8s = _MockDiscoveryK8s(namespaces=[DiscoveredNamespace(name="ns", group_name="NS")])
+        result = DiscoveryRunner(k8s, [_Source()], validator=_Validator()).run()
+        names = {m.payload["name"] for m in result}
+        assert "good" in names
+        assert "dead" not in names
+        # group monitor always passes through
+        assert any(m.payload["type"] == "group" for m in result)
+
+    def test_null_validator_passes_all_through(self) -> None:
+        class _Source:
+            def discover(self, namespace: str, group_name: str) -> list[DesiredMonitor]:
+                return [
+                    DesiredMonitor(
+                        identity_key=f"discovered:ingress:{namespace}/ing/x",
+                        payload={"type": "http", "name": "x", "url": "http://x.example.com"},
+                        parent_name=group_name, notification_names=[], user_tags=[],
+                    )
+                ]
+
+        k8s = _MockDiscoveryK8s(namespaces=[DiscoveredNamespace(name="ns", group_name="NS")])
+        result = DiscoveryRunner(k8s, [_Source()], validator=NullValidator()).run()
+        assert any(m.payload["name"] == "x" for m in result)
+
+    def test_no_validator_passes_all_through(self) -> None:
+        """When validator=None (default), nothing is filtered."""
+        class _Source:
+            def discover(self, namespace: str, group_name: str) -> list[DesiredMonitor]:
+                return [
+                    DesiredMonitor(
+                        identity_key=f"discovered:ingress:{namespace}/ing/x",
+                        payload={"type": "http", "name": "x", "url": "http://x.example.com"},
+                        parent_name=group_name, notification_names=[], user_tags=[],
+                    )
+                ]
+
+        k8s = _MockDiscoveryK8s(namespaces=[DiscoveredNamespace(name="ns", group_name="NS")])
+        result = DiscoveryRunner(k8s, [_Source()]).run()
+        assert any(m.payload["name"] == "x" for m in result)

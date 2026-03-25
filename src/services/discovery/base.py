@@ -77,8 +77,9 @@ class DiscoveredIngress:
 @dataclass
 class ServicePort:
     name: str  # may be empty string
-    port: int
+    port: int   # service port (what clients connect to)
     protocol: str  # "TCP", "UDP", etc.
+    target_port: int | str = 0  # container port or named port; 0 means unknown
 
 
 @dataclass
@@ -127,3 +128,7 @@ class DiscoveryK8sClientProtocol(Protocol):
 
 class DiscoverySourceProtocol(Protocol):
     def discover(self, namespace: str, group_name: str) -> list[DesiredMonitor]: ...
+
+
+class ValidatorProtocol(Protocol):
+    def is_reachable(self, monitor: DesiredMonitor) -> bool: ...

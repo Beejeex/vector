@@ -46,6 +46,9 @@ def _build_discovery_runner(cfg) -> Optional[DiscoveryRunnerProtocol]:  # type: 
     if cfg.discovery_databases:
         sources.append(DatabasePortDiscovery(dk8s))
 
+    from src.services.discovery.validator import EndpointValidator, NullValidator
+    validator = EndpointValidator(timeout_sec=cfg.discovery_validate_timeout) if cfg.discovery_validate else NullValidator()
+
     logger.info(
         "Discovery enabled",
         extra={
@@ -54,9 +57,11 @@ def _build_discovery_runner(cfg) -> Optional[DiscoveryRunnerProtocol]:  # type: 
             "probes": cfg.discovery_probes,
             "databases": cfg.discovery_databases,
             "active_sources": len(sources),
+            "validate": cfg.discovery_validate,
+            "validate_timeout_sec": cfg.discovery_validate_timeout,
         },
     )
-    return DiscoveryRunner(dk8s, sources)
+    return DiscoveryRunner(dk8s, sources, validator=validator)
 
 
 def main() -> None:

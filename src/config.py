@@ -20,6 +20,8 @@ class Config:
     discovery_probes: bool
     discovery_databases: bool
     discovery_ingress_default_scheme: str  # "https" or "http" — used when ingress spec has no tls: entry
+    discovery_validate: bool  # TCP-connect check before creating a discovered monitor
+    discovery_validate_timeout: float  # Seconds to wait for TCP connect (default 5)
 
 
 def load_config() -> Config:
@@ -53,4 +55,6 @@ def load_config() -> Config:
         discovery_probes=os.environ.get("DISCOVERY_PROBES", "true").strip().lower() != "false",
         discovery_databases=os.environ.get("DISCOVERY_DATABASES", "true").strip().lower() != "false",
         discovery_ingress_default_scheme=os.environ.get("DISCOVERY_INGRESS_DEFAULT_SCHEME", "https").strip().lower() or "https",
+        discovery_validate=os.environ.get("DISCOVERY_VALIDATE", "true").strip().lower() != "false",
+        discovery_validate_timeout=float(os.environ.get("DISCOVERY_VALIDATE_TIMEOUT", "5").strip() or "5"),
     )

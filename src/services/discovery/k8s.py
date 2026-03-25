@@ -132,8 +132,16 @@ class DiscoveryK8sClient:
                 port_name = p.name or ""
                 port_number = p.port
                 protocol = p.protocol or "TCP"
+                # target_port may be int or str (named port)
+                raw_target = getattr(p, "target_port", None)
+                if isinstance(raw_target, int):
+                    target_port: int | str = raw_target
+                elif isinstance(raw_target, str) and raw_target:
+                    target_port = raw_target
+                else:
+                    target_port = 0
                 if port_number:
-                    ports.append(ServicePort(name=port_name, port=port_number, protocol=protocol))
+                    ports.append(ServicePort(name=port_name, port=port_number, protocol=protocol, target_port=target_port))
 
             selector: dict[str, str] = dict(spec.selector or {})
 

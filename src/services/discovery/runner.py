@@ -7,6 +7,7 @@ from src.models.desired import DesiredMonitor
 from src.services.discovery.base import (
     DiscoveryK8sClientProtocol,
     DiscoverySourceProtocol,
+    ValidatorProtocol,
     default_payload,
     make_group_key,
 )
@@ -24,6 +25,7 @@ class DiscoveryRunner:
     For each opted-in namespace the runner:
     1. Creates one group DesiredMonitor (so discovered monitors can be grouped).
     2. Runs every enabled source and collects child monitors.
+    3. Filters child monitors through the validator before including them.
 
     The returned list feeds directly into the reconciler's desired monitor list.
     """
@@ -32,9 +34,11 @@ class DiscoveryRunner:
         self,
         k8s: DiscoveryK8sClientProtocol,
         sources: list[DiscoverySourceProtocol],
+        validator: ValidatorProtocol | None = None,
     ) -> None:
         self._k8s = k8s
         self._sources = sources
+        self._validator = validator
 
     def run(self) -> list[DesiredMonitor]:
         result: list[DesiredMonitor] = []
@@ -48,11 +52,10 @@ class DiscoveryRunner:
             result.append(group_monitor)
 
             child_count = 0
+            skipped_count = 0
             for source in self._sources:
                 try:
                     discovered = source.discover(ns_info.name, ns_info.group_name)
-                    result.extend(discovered)
-                    child_count += len(discovered)
                 except Exception as exc:
                     logger.warning(
                         "Discovery source failed",
@@ -62,10 +65,22 @@ class DiscoveryRunner:
                             "error": str(exc),
                         },
                     )
+                    continue
+
+                for monitor in discovered:
+                    if self._validator is not None and not self._validator.is_reachable(monitor):
+                        skipped_count += 1
+                        continue
+                    result.append(monitor)
+                    child_count += 1
 
             logger.info(
                 "Discovery complete for namespace",
-                extra={"namespace": ns_info.name, "discovered": child_count},
+                extra={
+                    "namespace": ns_info.name,
+                    "discovered": child_count,
+                    "skipped_unreachable": skipped_count,
+                },
             )
 
         return result
