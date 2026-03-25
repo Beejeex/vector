@@ -21,7 +21,7 @@ metadata:
   name: vector
 rules:
   - apiGroups:
-      - monitoring.monitoring.example.com
+      - vector.beejeex.github.io
     resources:
       - kumamonitors
     verbs:

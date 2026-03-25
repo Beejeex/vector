@@ -11,7 +11,7 @@ from src.models.crd import KumaMonitor, KumaMonitorSpec
 
 logger = logging.getLogger(__name__)
 
-CRD_GROUP = "monitoring.monitoring.example.com"
+CRD_GROUP = "vector.beejeex.github.io"
 CRD_VERSION = "v1alpha1"
 CRD_PLURAL = "kumamonitors"
 

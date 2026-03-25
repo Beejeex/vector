@@ -72,15 +72,15 @@ The controller does require write access to Uptime Kuma because reconciliation c
 Treat Uptime Kuma credentials as secrets and never hardcode them.
 
 ## CRD direction
-The CRD definition lives at [`docs/crd.yaml`](../docs/crd.yaml).
+The CRD definition lives at [`deploy/crd.yaml`](../deploy/crd.yaml).
 Example KumaMonitor resources covering all common use cases are in [`docs/example-kumamonitor.yaml`](../docs/example-kumamonitor.yaml).
 
-- apiVersion: monitoring.monitoring.example.com/v1alpha1
+- apiVersion: vector.beejeex.github.io/v1alpha1
 - kind: KumaMonitor
 
 Supported monitor types: `http`, `keyword`, `json-query`, `grpc-keyword`, `ping`, `port` (TCP), `dns`, `push`, `docker`, `mqtt`, `kafka-producer`, `postgres`, `mysql`, `sqlserver`, `mongodb`, `redis`, `radius`, `real-browser`, `steam`, `gamedig`, `tailscale-ping`, `group`.
 
-Core spec fields (full schema in `docs/crd.yaml`):
+Core spec fields (full schema in `deploy/crd.yaml`):
 
 | Field | Required | Type | Description |
 |---|---|---|---|

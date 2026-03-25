@@ -21,7 +21,7 @@ Vector only touches monitors tagged `managed-by=vector`. Manually created monito
 
 ### 1. Apply the CRD and RBAC
 
-The CRD registers the `KumaMonitor` resource kind. The RBAC manifest creates the `vector` namespace, `ServiceAccount`, `ClusterRole`, and `ClusterRoleBinding`. Reference: [`docs/rbac.yaml`](docs/rbac.yaml).
+The CRD registers the `KumaMonitor` resource kind. The RBAC manifest creates the `vector` namespace, `ServiceAccount`, `ClusterRole`, and `ClusterRoleBinding`. Reference: [`deploy/rbac.yaml`](deploy/rbac.yaml).
 
 ### 2. Create the credentials secret
 
@@ -55,7 +55,7 @@ Update the `image` field in [`docs/deployment.yaml`](docs/deployment.yaml) to po
 
 `http`, `keyword`, `json-query`, `grpc-keyword`, `ping`, `port`, `dns`, `push`, `docker`, `mqtt`, `kafka-producer`, `postgres`, `mysql`, `sqlserver`, `mongodb`, `redis`, `radius`, `real-browser`, `steam`, `gamedig`, `tailscale-ping`, `group`
 
-See [`docs/crd.yaml`](docs/crd.yaml) for the full field reference and [`docs/example-kumamonitor.yaml`](docs/example-kumamonitor.yaml) for working examples of every type.
+See [`deploy/crd.yaml`](deploy/crd.yaml) for the full field reference and [`docs/example-kumamonitor.yaml`](docs/example-kumamonitor.yaml) for working examples of every type.
 
 ## Ownership model
 

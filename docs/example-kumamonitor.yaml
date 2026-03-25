@@ -13,7 +13,7 @@
 ---
 # ── Group ────────────────────────────────────────────────────────────────────
 # Parent container. url is not used by Uptime Kuma for this type.
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: production-group
@@ -24,7 +24,7 @@ spec:
 
 ---
 # ── HTTP — minimal ────────────────────────────────────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: my-website
@@ -36,7 +36,7 @@ spec:
 
 ---
 # ── HTTP — full options ───────────────────────────────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: api-health
@@ -74,7 +74,7 @@ spec:
 
 ---
 # ── HTTP — POST with JSON body ────────────────────────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: api-login
@@ -100,7 +100,7 @@ spec:
 
 ---
 # ── HTTP — Basic authentication ───────────────────────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: internal-dashboard
@@ -117,7 +117,7 @@ spec:
 
 ---
 # ── HTTP — OAuth2 Client Credentials ─────────────────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: oauth-protected-api
@@ -137,7 +137,7 @@ spec:
 
 ---
 # ── HTTP — mTLS client certificate ───────────────────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: mtls-service
@@ -163,7 +163,7 @@ spec:
 
 ---
 # ── HTTP — NTLM (Windows environments) ───────────────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: windows-service
@@ -181,7 +181,7 @@ spec:
 
 ---
 # ── Keyword — UP when keyword present in response ─────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: status-page-keyword
@@ -199,7 +199,7 @@ spec:
 
 ---
 # ── Keyword — UP when keyword is absent (inverted) ────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: error-banner-absent
@@ -214,7 +214,7 @@ spec:
 
 ---
 # ── JSON Query — evaluate a field in a JSON API response ─────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: api-json-status
@@ -232,7 +232,7 @@ spec:
 
 ---
 # ── Ping — ICMP ping ──────────────────────────────────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: db-host-ping
@@ -249,7 +249,7 @@ spec:
 
 ---
 # ── Port — TCP port connectivity check ───────────────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: postgres-tcp
@@ -268,7 +268,7 @@ spec:
 
 ---
 # ── DNS — resolve a hostname and verify the record ───────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: dns-api
@@ -286,7 +286,7 @@ spec:
 
 ---
 # ── DNS — MX record check ─────────────────────────────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: dns-mx
@@ -302,7 +302,7 @@ spec:
 ---
 # ── Push — heartbeat endpoint ─────────────────────────────────────────────────
 # Uptime Kuma auto-generates the push URL. The url field is ignored for this type.
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: batch-job-heartbeat
@@ -317,7 +317,7 @@ spec:
 
 ---
 # ── Docker — container running check ─────────────────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: nginx-container
@@ -334,7 +334,7 @@ spec:
 
 ---
 # ── MQTT — subscribe to a topic and check the payload ────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: iot-gateway-mqtt
@@ -351,7 +351,7 @@ spec:
 
 ---
 # ── Kafka Producer — publish a probe message to verify broker reachability ────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: kafka-connectivity
@@ -370,7 +370,7 @@ spec:
 
 ---
 # ── gRPC Keyword — call a gRPC method and search the response ────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: grpc-health
@@ -389,7 +389,7 @@ spec:
 
 ---
 # ── PostgreSQL — query check ──────────────────────────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: postgres-query
@@ -405,7 +405,7 @@ spec:
 
 ---
 # ── MySQL / MariaDB — query check ────────────────────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: mysql-check
@@ -421,7 +421,7 @@ spec:
 
 ---
 # ── MongoDB — connectivity check ──────────────────────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: mongodb-check
@@ -436,7 +436,7 @@ spec:
 
 ---
 # ── Redis — connectivity check ────────────────────────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: redis-check
@@ -451,7 +451,7 @@ spec:
 
 ---
 # ── Radius — AAA server authentication test ───────────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: radius-auth
@@ -471,7 +471,7 @@ spec:
 
 ---
 # ── Maintenance mode — monitor exists but is silenced ────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: legacy-service
@@ -487,7 +487,7 @@ spec:
 
 ---
 # ── Disabled — paused, not deleted ───────────────────────────────────────────
-apiVersion: monitoring.monitoring.example.com/v1alpha1
+apiVersion: vector.beejeex.github.io/v1alpha1
 kind: KumaMonitor
 metadata:
   name: staging-api
