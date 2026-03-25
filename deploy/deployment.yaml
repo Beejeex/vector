@@ -28,7 +28,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: vector
-          image: ghcr.io/beejeex/vector:v0.0.7
+          image: ghcr.io/beejeex/vector:v0.0.8
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
@@ -63,6 +63,17 @@ spec:
               mountPath: /data
             - name: tmp
               mountPath: /tmp
+          livenessProbe:
+            # The main loop touches /tmp/healthy after every reconcile cycle.
+            # If the file is older than 3× the reconcile interval the loop is stuck.
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - find /tmp/healthy -mmin -3
+            initialDelaySeconds: 120
+            periodSeconds: 60
+            failureThreshold: 3
           resources:
             requests:
               cpu: 50m

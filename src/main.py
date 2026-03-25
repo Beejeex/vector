@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 import time
 
@@ -68,6 +69,12 @@ def main() -> None:
             )
         finally:
             kuma.disconnect()
+
+        # Touch the liveness file so Kubernetes knows the loop is still running.
+        try:
+            open("/tmp/healthy", "w").close()
+        except OSError:
+            pass
 
         logger.debug("Sleeping", extra={"seconds": cfg.reconcile_interval})
         time.sleep(cfg.reconcile_interval)
