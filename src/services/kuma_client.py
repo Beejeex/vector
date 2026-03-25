@@ -80,7 +80,7 @@ class UptimeKumaClient:
         monitor_id: int = result["monitorID"]
         logger.info(
             "Monitor created in Uptime Kuma",
-            extra={"monitor_id": monitor_id, "name": payload.get("name")},
+            extra={"monitor_id": monitor_id, "monitor_name": payload.get("name")},
         )
         return monitor_id
 
@@ -88,7 +88,7 @@ class UptimeKumaClient:
         self._client.edit_monitor(monitor_id, **payload)
         logger.info(
             "Monitor updated in Uptime Kuma",
-            extra={"monitor_id": monitor_id, "name": payload.get("name")},
+            extra={"monitor_id": monitor_id, "monitor_name": payload.get("name")},
         )
 
     def delete_monitor(self, monitor_id: int) -> None:

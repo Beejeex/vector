@@ -99,6 +99,24 @@ class TestCreateMonitorConditionsInjection:
         api._build_monitor_data.assert_called_once_with(**payload)
 
 
+class TestCreateMonitorLogging:
+    def test_log_uses_monitor_name_not_name(self):
+        """'name' is a reserved LogRecord attribute — must use 'monitor_name' in extra dict."""
+        import logging
+
+        client = _make_client()
+        api = _mock_api(call_result={"monitorID": 1, "msg": "successAdded"})
+        client._api = api
+
+        # If 'name' were used in extra={}, this would raise KeyError from logging internals.
+        # monitor_name must be used instead.
+        with patch("src.services.kuma_client.logger") as mock_logger:
+            client.create_monitor({"type": "http", "name": "my-svc"})
+            call_kwargs = mock_logger.info.call_args[1]
+            assert "name" not in call_kwargs.get("extra", {})
+            assert "monitor_name" in call_kwargs.get("extra", {})
+
+
 class TestCreateMonitorNotConnected:
     def test_raises_when_not_connected(self):
         """Calling create_monitor before connect() must raise RuntimeError."""
