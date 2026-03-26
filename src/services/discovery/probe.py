@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from src.models.desired import DesiredMonitor
 from src.services.discovery.base import (
@@ -96,6 +97,12 @@ class ProbeDiscovery:
                 key = make_identity_key(_SOURCE, namespace, workload.name, detail)
                 display_name = f"{workload.name}-{container_probes.container_name}"
 
+                extra_fields: dict[str, Any] = {}
+                if scheme == "https":
+                    # Internal HTTPS probes commonly use self-signed certs;
+                    # ignore TLS errors so Kuma can still reach the endpoint.
+                    extra_fields["ignoreTls"] = True
+
                 monitors.append(
                     DesiredMonitor(
                         identity_key=key,
@@ -107,6 +114,7 @@ class ProbeDiscovery:
                                 f"Discovered from {probe_type} probe on "
                                 f"{namespace}/{workload.name}/{container_probes.container_name}"
                             ),
+                            **extra_fields,
                         ),
                         parent_name=group_name,
                         notification_names=[],

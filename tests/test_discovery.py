@@ -582,7 +582,8 @@ class TestProbeDiscovery:
         assert "/live" in monitors[0].payload["url"]
         assert ":8080" in monitors[0].payload["url"]
 
-    def test_https_scheme(self) -> None:
+    def test_https_scheme_sets_ignore_tls(self) -> None:
+        """HTTPS probe monitors must have ignoreTls=True — internal certs are self-signed."""
         workload = DiscoveredWorkload(
             name="svc",
             namespace="ns",
@@ -596,6 +597,24 @@ class TestProbeDiscovery:
         )
         monitors = ProbeDiscovery(self._k8s("ns", [workload])).discover("ns", "G")
         assert monitors[0].payload["url"].startswith("https://")
+        assert monitors[0].payload.get("ignoreTls") is True
+
+    def test_http_scheme_does_not_set_ignore_tls(self) -> None:
+        """HTTP probe monitors must NOT have ignoreTls set."""
+        workload = DiscoveredWorkload(
+            name="svc",
+            namespace="ns",
+            probes=[
+                ContainerProbes(
+                    container_name="c",
+                    liveness=HttpProbeInfo(path="/healthz", port=8080, scheme="HTTP"),
+                    readiness=None,
+                )
+            ],
+        )
+        monitors = ProbeDiscovery(self._k8s("ns", [workload])).discover("ns", "G")
+        assert monitors[0].payload["url"].startswith("http://")
+        assert monitors[0].payload.get("ignoreTls") is False
 
     def test_no_probes_returns_empty(self) -> None:
         workload = DiscoveredWorkload(name="svc", namespace="ns", probes=[])
