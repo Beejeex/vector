@@ -227,8 +227,16 @@ class DiscoveryK8sClient:
         pod_labels: dict[str, str] = dict(getattr(pod_template_metadata, "labels", None) or {})
 
         for container in containers:
-            liveness = _extract_http_probe(getattr(container, "liveness_probe", None))
-            readiness = _extract_http_probe(getattr(container, "readiness_probe", None))
+            # Build a name→containerPort map so named probe ports can be resolved.
+            named_ports: dict[str, int] = {}
+            for cp in (getattr(container, "ports", None) or []):
+                cp_name = getattr(cp, "name", None)
+                cp_num = getattr(cp, "container_port", None)
+                if cp_name and cp_num:
+                    named_ports[cp_name] = int(cp_num)
+
+            liveness = _extract_http_probe(getattr(container, "liveness_probe", None), named_ports)
+            readiness = _extract_http_probe(getattr(container, "readiness_probe", None), named_ports)
             if liveness or readiness:
                 probes.append(
                     ContainerProbes(
@@ -241,7 +249,10 @@ class DiscoveryK8sClient:
         return DiscoveredWorkload(name=name, namespace=namespace, probes=probes, pod_labels=pod_labels)
 
 
-def _extract_http_probe(probe: Optional[object]) -> Optional[HttpProbeInfo]:
+def _extract_http_probe(
+    probe: Optional[object],
+    named_ports: dict[str, int] | None = None,
+) -> Optional[HttpProbeInfo]:
     if probe is None:
         return None
     http_get = getattr(probe, "http_get", None)
@@ -252,9 +263,20 @@ def _extract_http_probe(probe: Optional[object]) -> Optional[HttpProbeInfo]:
     scheme = (getattr(http_get, "scheme", None) or "HTTP").upper()
     if port is None:
         return None
-    # port can be int or str (named port) — we only handle numeric ports
+    # port can be int or str (named port — resolve via container's port list)
     try:
         port_int = int(port)
     except (TypeError, ValueError):
-        return None
+        if named_ports and isinstance(port, str):
+            resolved = named_ports.get(port)
+            if resolved is not None:
+                port_int = resolved
+            else:
+                logger.debug(
+                    "Probe references unknown named port — skipping",
+                    extra={"named_port": port},
+                )
+                return None
+        else:
+            return None
     return HttpProbeInfo(path=path, port=port_int, scheme=scheme)

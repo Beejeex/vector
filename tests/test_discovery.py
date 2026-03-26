@@ -690,6 +690,57 @@ class TestProbeDiscovery:
 
 
 # ---------------------------------------------------------------------------
+# Named probe port resolution (_extract_http_probe)
+# ---------------------------------------------------------------------------
+
+
+from src.services.discovery.k8s import _extract_http_probe  # noqa: E402
+
+
+class _FakeHttpGet:
+    def __init__(self, path: str, port: object, scheme: str = "HTTP") -> None:
+        self.path = path
+        self.port = port
+        self.scheme = scheme
+
+
+class _FakeProbe:
+    def __init__(self, http_get: _FakeHttpGet) -> None:
+        self.http_get = http_get
+
+
+class TestExtractHttpProbe:
+    def test_numeric_port_resolved(self) -> None:
+        probe = _FakeProbe(_FakeHttpGet("/-/healthy", 9090))
+        result = _extract_http_probe(probe)
+        assert result is not None
+        assert result.port == 9090
+        assert result.path == "/-/healthy"
+
+    def test_named_port_resolved_via_named_ports(self) -> None:
+        """Real-world: Prometheus StatefulSet uses port name 'http-web'."""
+        probe = _FakeProbe(_FakeHttpGet("/-/healthy", "http-web", "HTTP"))
+        result = _extract_http_probe(probe, named_ports={"http-web": 9090})
+        assert result is not None
+        assert result.port == 9090
+        assert result.path == "/-/healthy"
+        assert result.scheme == "HTTP"
+
+    def test_unknown_named_port_returns_none(self) -> None:
+        probe = _FakeProbe(_FakeHttpGet("/health", "unknown-port"))
+        result = _extract_http_probe(probe, named_ports={"other-port": 8080})
+        assert result is None
+
+    def test_named_port_no_named_ports_dict_returns_none(self) -> None:
+        probe = _FakeProbe(_FakeHttpGet("/health", "http-web"))
+        result = _extract_http_probe(probe)
+        assert result is None
+
+    def test_none_probe_returns_none(self) -> None:
+        assert _extract_http_probe(None) is None
+
+
+# ---------------------------------------------------------------------------
 # DatabasePortDiscovery
 # ---------------------------------------------------------------------------
 
