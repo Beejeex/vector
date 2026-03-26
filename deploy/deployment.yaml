@@ -28,7 +28,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: vector
-          image: ghcr.io/beejeex/vector:v0.0.15
+          image: ghcr.io/beejeex/vector:v0.0.16
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
