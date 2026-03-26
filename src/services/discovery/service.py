@@ -49,6 +49,24 @@ def _is_metrics_port(port_name: str) -> bool:
     return name == "metrics" or name.endswith("-metrics")
 
 
+def _scheme_for_unnamed_port(port_number: int) -> str | None:
+    """Return http/https for well-known port numbers when the port has no name.
+
+    Many services (e.g. Emby, Jellyfin) expose port 80 or 443 without naming it.
+    This lets service discovery still produce a monitor for these ports rather than
+    silently skipping them.
+
+    Returns None if the port number is not well-known.
+    """
+    _WELL_KNOWN: dict[int, str] = {
+        80: "http",
+        443: "https",
+        8080: "http",
+        8443: "https",
+    }
+    return _WELL_KNOWN.get(port_number)
+
+
 def _find_probe_for_service_port(
     svc: DiscoveredService,
     port: ServicePort,
@@ -57,8 +75,8 @@ def _find_probe_for_service_port(
     """Return a probe (liveness preferred, else readiness) from any workload selected by svc
     whose probe port matches the service's targetPort (or service port as fallback).
 
-    This lets service monitors inherit the correct scheme and path from the deployment's
-    probe configuration rather than guessing from the port name alone.
+    When a probe is found the service port is considered *owned* by ProbeDiscovery.
+    ServicePortDiscovery will skip this port to avoid creating a duplicate monitor.
     """
     if not svc.selector:
         return None
@@ -93,28 +111,37 @@ class ServicePortDiscovery:
         workloads = self._k8s.list_workloads(namespace)
         for svc in self._k8s.list_services(namespace):
             for port in svc.ports:
-                if not _is_http_port(port.name or ""):
-                    continue
+                port_name = port.name or ""
+
+                # Determine the scheme: named port takes priority, then well-known number.
+                if _is_http_port(port_name):
+                    scheme_from_name: str | None = "https" if _is_https_port(port_name) else "http"
+                else:
+                    scheme_from_name = None
+
+                unnamed_scheme = _scheme_for_unnamed_port(port.port) if not port_name else None
+
+                scheme = scheme_from_name or unnamed_scheme
+                if scheme is None:
+                    continue  # not an HTTP/HTTPS port we recognise
 
                 hostname = f"{svc.name}.{namespace}.svc.cluster.local"
-                detail = port.name or str(port.port)
+                detail = port_name or str(port.port)
                 key = make_identity_key(_SOURCE, namespace, svc.name, detail)
                 display_name = f"{svc.name}-{detail}"
 
                 probe_info = _find_probe_for_service_port(svc, port, workloads)
                 if probe_info is not None:
-                    # Probe config is authoritative: use its scheme and path.
-                    scheme = probe_info.scheme.lower()
-                    path = probe_info.path
+                    # This port is already covered by ProbeDiscovery (which derives
+                    # its URL from the workload's liveness/readiness probe directly).
+                    # Skip it here to avoid a duplicate monitor.
                     logger.debug(
-                        "Using probe scheme/path for service port monitor",
-                        extra={"key": key, "scheme": scheme, "path": path},
+                        "Skipping service port — covered by probe discovery",
+                        extra={"key": key, "target_port": port.target_port},
                     )
-                else:
-                    # Fall back to port-name heuristics.
-                    scheme = "https" if _is_https_port(port.name or "") else "http"
-                    path = "/metrics" if _is_metrics_port(port.name or "") else ""
+                    continue
 
+                path = "/metrics" if _is_metrics_port(port_name) else ""
                 url = f"{scheme}://{hostname}:{port.port}{path}"
 
                 extra_fields: dict[str, Any] = {}

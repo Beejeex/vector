@@ -22,6 +22,24 @@ from src.services.discovery.base import (
 logger = logging.getLogger(__name__)
 
 
+def _best_ingress_path(paths: list[str]) -> str:
+    """Return the best path to use for an uptime monitor URL.
+
+    If any path is exactly "/" (or empty), returns "" so the monitor URL ends
+    at the hostname with no path suffix.  Otherwise returns the shortest path
+    (e.g. "/hiveui") so the monitor hits a real endpoint rather than one that
+    might 404.
+    """
+    if not paths:
+        return ""
+    # Normalise: treat empty string as "/"
+    normalised = [p if p else "/" for p in paths]
+    if "/" in normalised:
+        return ""
+    # Pick shortest non-root path so we probe the shallowest real endpoint.
+    return min(normalised, key=len)
+
+
 class DiscoveryK8sClient:
     """Read-only Kubernetes client for discovery sources.
 
@@ -96,7 +114,10 @@ class DiscoveryK8sClient:
                 host = rule.host
                 if not host:
                     continue
-                rules.append(IngressRule(host=host, tls=host in tls_hosts))
+                # Determine best monitoring path for this host.
+                http_paths = [p.path or "/" for p in getattr(rule.http, "paths", None) or []]
+                path = _best_ingress_path(http_paths)
+                rules.append(IngressRule(host=host, tls=host in tls_hosts, path=path))
 
             if rules:
                 ingresses.append(DiscoveredIngress(name=name, namespace=namespace, rules=rules))

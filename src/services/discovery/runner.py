@@ -86,7 +86,33 @@ class DiscoveryRunner:
                 },
             )
 
-        return result
+        return _deduplicate(result)
+
+
+def _deduplicate(monitors: list[DesiredMonitor]) -> list[DesiredMonitor]:
+    """Remove monitors whose URL duplicates one already in the list.
+
+    Groups (no URL) are always kept.  When two monitors share the same URL,
+    the first one wins (probe/ingress sources appear before service source in
+    the runner, so the more-specific monitor is retained).
+    """
+    seen_urls: set[str] = set()
+    result: list[DesiredMonitor] = []
+    for m in monitors:
+        url: str | None = m.payload.get("url")
+        if url is None:
+            # Group monitor — always include.
+            result.append(m)
+            continue
+        if url in seen_urls:
+            logger.debug(
+                "Deduplicating monitor with duplicate URL",
+                extra={"key": m.identity_key, "url": url},
+            )
+            continue
+        seen_urls.add(url)
+        result.append(m)
+    return result
 
 
 def _make_group_monitor(namespace: str, group_name: str) -> DesiredMonitor:

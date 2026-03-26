@@ -65,6 +65,7 @@ class DiscoveredNamespace:
 class IngressRule:
     host: str
     tls: bool  # True when the host is covered by an Ingress TLS entry
+    path: str = ""  # Best monitoring path: shortest non-root prefix, or "" when root is present
 
 
 @dataclass

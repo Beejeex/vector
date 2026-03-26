@@ -39,7 +39,7 @@ class IngressDiscovery:
                 # tls=True means the host is explicitly listed in spec.tls[].hosts.
                 # tls=False falls back to the configured default scheme.
                 scheme = "https" if rule.tls else self._default_scheme
-                url = f"{scheme}://{rule.host}"
+                url = f"{scheme}://{rule.host}{rule.path}"
                 key = make_identity_key(_SOURCE, namespace, ingress.name, rule.host)
                 display_name = rule.host
 
