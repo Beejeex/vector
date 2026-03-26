@@ -47,11 +47,9 @@ class DiscoveryRunner:
         logger.info("Discovery: opted-in namespaces", extra={"count": len(namespaces)})
 
         for ns_info in namespaces:
-            # Always create a group monitor for the namespace so children can reference it.
             group_monitor = _make_group_monitor(ns_info.name, ns_info.group_name)
-            result.append(group_monitor)
 
-            child_count = 0
+            children: list[DesiredMonitor] = []
             skipped_count = 0
             for source in self._sources:
                 try:
@@ -71,14 +69,19 @@ class DiscoveryRunner:
                     if self._validator is not None and not self._validator.is_reachable(monitor):
                         skipped_count += 1
                         continue
-                    result.append(monitor)
-                    child_count += 1
+                    children.append(monitor)
+
+            # Only include the group if it has at least one reachable child monitor.
+            # An empty group produces a spurious "Group empty" warning in Uptime Kuma.
+            if children:
+                result.append(group_monitor)
+                result.extend(children)
 
             logger.info(
                 "Discovery complete for namespace",
                 extra={
                     "namespace": ns_info.name,
-                    "discovered": child_count,
+                    "discovered": len(children),
                     "skipped_unreachable": skipped_count,
                 },
             )

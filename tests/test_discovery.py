@@ -325,6 +325,119 @@ class TestServicePortDiscovery:
         monitors = ServicePortDiscovery(self._k8s("ns", [svc])).discover("ns", "My Group")
         assert monitors[0].parent_name == "My Group"
 
+    def test_probe_scheme_overrides_port_name_heuristic(self) -> None:
+        """If a workload probe targets the service's port, use the probe's scheme.
+
+        Real-world case: port named 'http-web' but the app actually serves HTTPS
+        (e.g. Prometheus with TLS enabled). The probe has scheme=HTTPS which is
+        authoritative; the port-name heuristic would wrongly pick HTTP.
+        """
+        svc = DiscoveredService(
+            name="prometheus-operated",
+            namespace="monitoring",
+            cluster_ip="10.43.0.10",
+            ports=[ServicePort(name="http-web", port=9090, protocol="TCP", target_port=9090)],
+            selector={"app": "prometheus"},
+        )
+        workload = DiscoveredWorkload(
+            name="prometheus",
+            namespace="monitoring",
+            pod_labels={"app": "prometheus"},
+            probes=[
+                ContainerProbes(
+                    container_name="prometheus",
+                    liveness=HttpProbeInfo(path="/-/healthy", port=9090, scheme="HTTPS"),
+                    readiness=None,
+                )
+            ],
+        )
+        k8s = _MockDiscoveryK8s(services={"monitoring": [svc]}, workloads={"monitoring": [workload]})
+        monitors = ServicePortDiscovery(k8s).discover("monitoring", "G")
+        assert len(monitors) == 1
+        url = monitors[0].payload["url"]
+        assert url.startswith("https://"), f"Expected https scheme, got: {url}"
+        assert monitors[0].payload.get("ignoreTls") is True
+
+    def test_probe_path_overrides_port_name_heuristic(self) -> None:
+        """Probe path /-/healthy is used instead of / for services with http ports."""
+        svc = DiscoveredService(
+            name="prometheus-operated",
+            namespace="monitoring",
+            cluster_ip="10.43.0.10",
+            ports=[ServicePort(name="http-web", port=9090, protocol="TCP", target_port=9090)],
+            selector={"app": "prometheus"},
+        )
+        workload = DiscoveredWorkload(
+            name="prometheus",
+            namespace="monitoring",
+            pod_labels={"app": "prometheus"},
+            probes=[
+                ContainerProbes(
+                    container_name="prometheus",
+                    liveness=HttpProbeInfo(path="/-/healthy", port=9090, scheme="HTTP"),
+                    readiness=None,
+                )
+            ],
+        )
+        k8s = _MockDiscoveryK8s(services={"monitoring": [svc]}, workloads={"monitoring": [workload]})
+        monitors = ServicePortDiscovery(k8s).discover("monitoring", "G")
+        assert monitors[0].payload["url"].endswith("/-/healthy")
+
+    def test_probe_not_matched_falls_back_to_port_name(self) -> None:
+        """When no workload probe targets the port, port-name heuristic still applies."""
+        svc = DiscoveredService(
+            name="my-app",
+            namespace="default",
+            cluster_ip="10.0.0.1",
+            ports=[ServicePort(name="https", port=8443, protocol="TCP", target_port=8443)],
+            selector={"app": "my-app"},
+        )
+        # Workload probes on a different port — should not affect this service port.
+        workload = DiscoveredWorkload(
+            name="my-app",
+            namespace="default",
+            pod_labels={"app": "my-app"},
+            probes=[
+                ContainerProbes(
+                    container_name="app",
+                    liveness=HttpProbeInfo(path="/health", port=9999, scheme="HTTP"),
+                    readiness=None,
+                )
+            ],
+        )
+        k8s = _MockDiscoveryK8s(services={"default": [svc]}, workloads={"default": [workload]})
+        monitors = ServicePortDiscovery(k8s).discover("default", "G")
+        assert len(monitors) == 1
+        # Falls back to https heuristic from port name.
+        assert monitors[0].payload["url"].startswith("https://")
+
+    def test_probe_with_no_selector_falls_back_to_port_name(self) -> None:
+        """Services without selectors (e.g. ExternalName) skip the probe lookup."""
+        svc = DiscoveredService(
+            name="external-svc",
+            namespace="default",
+            cluster_ip="10.0.0.2",
+            ports=[ServicePort(name="http", port=80, protocol="TCP", target_port=80)],
+            selector={},  # no selector
+        )
+        workload = DiscoveredWorkload(
+            name="app",
+            namespace="default",
+            pod_labels={"app": "app"},
+            probes=[
+                ContainerProbes(
+                    container_name="app",
+                    liveness=HttpProbeInfo(path="/healthz", port=80, scheme="HTTPS"),
+                    readiness=None,
+                )
+            ],
+        )
+        k8s = _MockDiscoveryK8s(services={"default": [svc]}, workloads={"default": [workload]})
+        monitors = ServicePortDiscovery(k8s).discover("default", "G")
+        # Falls back to http (from port name "http"), ignores workload probe.
+        assert monitors[0].payload["url"].startswith("http://")
+        assert not monitors[0].payload.get("ignoreTls")
+
 
 # ---------------------------------------------------------------------------
 # ProbeDiscovery
@@ -557,17 +670,38 @@ class TestDiscoveryRunner:
         assert runner.run() == []
 
     def test_group_monitor_created_per_namespace(self) -> None:
+        """A group is only emitted when at least one child monitor exists.
+        An empty namespace (no sources) produces no monitors — this avoids
+        the 'Group empty' warning in Uptime Kuma.
+        """
         k8s = _MockDiscoveryK8s(
-            namespaces=[DiscoveredNamespace(name="ns1", group_name="NS One")]
+            namespaces=[DiscoveredNamespace(name="ns1", group_name="NS One")],
+            ingresses={
+                "ns1": [
+                    DiscoveredIngress(
+                        name="ing",
+                        namespace="ns1",
+                        rules=[IngressRule(host="app.example.com", tls=False)],
+                    )
+                ]
+            },
         )
-        runner = DiscoveryRunner(k8s, [])
+        runner = DiscoveryRunner(k8s, [IngressDiscovery(k8s)])
         result = runner.run()
-        assert len(result) == 1
-        group = result[0]
-        assert group.payload["type"] == "group"
+        # 1 group + 1 ingress child
+        assert len(result) == 2
+        group = next(m for m in result if m.payload["type"] == "group")
         assert group.payload["name"] == "NS One"
         assert group.identity_key == make_group_key("ns1")
         assert group.parent_name is None
+
+    def test_empty_namespace_produces_no_monitors(self) -> None:
+        """Namespaces with no sources or no matching resources emit no monitors at all."""
+        k8s = _MockDiscoveryK8s(
+            namespaces=[DiscoveredNamespace(name="empty", group_name="Empty")]
+        )
+        result = DiscoveryRunner(k8s, []).run()
+        assert result == []
 
     def test_sources_are_called_per_namespace(self) -> None:
         k8s = _MockDiscoveryK8s(
@@ -591,13 +725,30 @@ class TestDiscoveryRunner:
         assert "http" in types
 
     def test_multiple_namespaces_each_get_group(self) -> None:
+        """Each namespace that has at least one child monitor gets its own group."""
         k8s = _MockDiscoveryK8s(
             namespaces=[
                 DiscoveredNamespace(name="ns1", group_name="NS1"),
                 DiscoveredNamespace(name="ns2", group_name="NS2"),
-            ]
+            ],
+            ingresses={
+                "ns1": [
+                    DiscoveredIngress(
+                        name="ing1",
+                        namespace="ns1",
+                        rules=[IngressRule(host="a.example.com", tls=False)],
+                    )
+                ],
+                "ns2": [
+                    DiscoveredIngress(
+                        name="ing2",
+                        namespace="ns2",
+                        rules=[IngressRule(host="b.example.com", tls=False)],
+                    )
+                ],
+            },
         )
-        result = DiscoveryRunner(k8s, []).run()
+        result = DiscoveryRunner(k8s, [IngressDiscovery(k8s)]).run()
         group_keys = {m.identity_key for m in result if m.payload["type"] == "group"}
         assert make_group_key("ns1") in group_keys
         assert make_group_key("ns2") in group_keys
