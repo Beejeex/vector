@@ -226,6 +226,8 @@ class DiscoveryK8sClient:
         pod_template_metadata = getattr(template, "metadata", None) if template else None
         pod_labels: dict[str, str] = dict(getattr(pod_template_metadata, "labels", None) or {})
 
+        # Build a merged name→containerPort map across all containers.
+        all_named_ports: dict[str, int] = {}
         for container in containers:
             # Build a name→containerPort map so named probe ports can be resolved.
             named_ports: dict[str, int] = {}
@@ -234,6 +236,7 @@ class DiscoveryK8sClient:
                 cp_num = getattr(cp, "container_port", None)
                 if cp_name and cp_num:
                     named_ports[cp_name] = int(cp_num)
+            all_named_ports.update(named_ports)
 
             liveness = _extract_http_probe(getattr(container, "liveness_probe", None), named_ports)
             readiness = _extract_http_probe(getattr(container, "readiness_probe", None), named_ports)
@@ -246,7 +249,7 @@ class DiscoveryK8sClient:
                     )
                 )
 
-        return DiscoveredWorkload(name=name, namespace=namespace, probes=probes, pod_labels=pod_labels)
+        return DiscoveredWorkload(name=name, namespace=namespace, probes=probes, pod_labels=pod_labels, named_container_ports=all_named_ports)
 
 
 def _extract_http_probe(

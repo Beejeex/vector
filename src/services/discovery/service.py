@@ -13,7 +13,6 @@ from src.services.discovery.base import (
     default_payload,
     make_identity_key,
 )
-
 logger = logging.getLogger(__name__)
 
 _SOURCE = "service"
@@ -81,20 +80,32 @@ def _find_probe_for_service_port(
     if not svc.selector:
         return None
 
-    # Determine which container port to match against.
+    # Determine which container port number to match against the probe port.
+    # target_port may be an int (numeric) or str (named — resolve via workload container ports).
     if isinstance(port.target_port, int) and port.target_port > 0:
-        target_port_num = port.target_port
+        target_port_num: int | None = port.target_port
+    elif isinstance(port.target_port, str) and port.target_port:
+        # Named targetPort — will be resolved per-workload below.
+        target_port_num = None
     else:
-        # Named targetPort or unknown — fall back to service port number.
+        # Unknown — fall back to service port number.
         target_port_num = port.port
 
     for workload in workloads:
         # Skip workloads whose pods are not selected by this service.
         if not all(workload.pod_labels.get(k) == v for k, v in svc.selector.items()):
             continue
+
+        # Resolve a named targetPort against this workload's container ports.
+        if target_port_num is None and isinstance(port.target_port, str):
+            resolved = workload.named_container_ports.get(port.target_port)
+            effective_target = resolved if resolved is not None else port.port
+        else:
+            effective_target = target_port_num if target_port_num is not None else port.port
+
         for container_probes in workload.probes:
             probe = container_probes.liveness or container_probes.readiness
-            if probe is not None and probe.port == target_port_num:
+            if probe is not None and probe.port == effective_target:
                 return probe
 
     return None

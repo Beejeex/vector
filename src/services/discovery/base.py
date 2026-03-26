@@ -113,6 +113,7 @@ class DiscoveredWorkload:
     namespace: str
     probes: list[ContainerProbes] = field(default_factory=list)
     pod_labels: dict[str, str] = field(default_factory=dict)  # pod template labels for service matching
+    named_container_ports: dict[str, int] = field(default_factory=dict)  # port name → containerPort number
 
 
 # ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@ import logging
 from src.models.desired import DesiredMonitor
 from src.services.discovery.base import (
     DiscoveredService,
+    DiscoveredWorkload,
     DiscoveryK8sClientProtocol,
     default_payload,
     make_identity_key,
@@ -26,17 +27,21 @@ def _find_service_for_workload(
     return None
 
 
-def _resolve_service_port(svc: DiscoveredService, container_port: int) -> int:
+def _resolve_service_port(svc: DiscoveredService, container_port: int, workload: DiscoveredWorkload | None = None) -> int:
     """Return the service port number that routes to the given container port.
 
     Checks each ServicePort's target_port against container_port.
-    Falls back to using container_port directly if no match is found (e.g. host networking).
+    Named targetPorts are resolved via the workload's named_container_ports when provided.
+    Falls back to using container_port directly if no match is found.
     """
     for sp in svc.ports:
-        # target_port may be an int (numeric) or str (named port — ignored here).
         if isinstance(sp.target_port, int) and sp.target_port == container_port:
             return sp.port
-    # No matching targetPort found — fall back to the container port so the URL is still useful.
+        # Named targetPort: resolve to container port number via workload, then compare.
+        if isinstance(sp.target_port, str) and sp.target_port and workload is not None:
+            resolved = workload.named_container_ports.get(sp.target_port)
+            if resolved is not None and resolved == container_port:
+                return sp.port
     logger.debug(
         "No service port maps to container port, using container port directly",
         extra={"service": svc.name, "container_port": container_port},
@@ -83,7 +88,7 @@ class ProbeDiscovery:
                 # through kube-proxy and is reachable from Uptime Kuma; the container port
                 # is only directly accessible on the pod IP.
                 if svc is not None:
-                    port = _resolve_service_port(svc, probe.port)
+                    port = _resolve_service_port(svc, probe.port, workload)
                 else:
                     port = probe.port
                 url = f"{scheme}://{hostname}:{port}{probe.path}"

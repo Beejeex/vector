@@ -741,6 +741,69 @@ class TestExtractHttpProbe:
 
 
 # ---------------------------------------------------------------------------
+# Named targetPort resolution — service skip + probe port
+# ---------------------------------------------------------------------------
+
+
+class TestNamedTargetPortResolution:
+    """Real-world regression: prometheus-kube-prometheus-operator.
+
+    Service: name=https, port=443, targetPort="https" (named string).
+    Container: name="https", containerPort=10250.
+    Probe: httpGet path=/healthz, port="https" (named) → resolves to 10250.
+
+    Expected:
+    - ServicePortDiscovery skips port 443 (probe owns it).
+    - ProbeDiscovery produces a monitor at :443/healthz (service port, not container port).
+    """
+
+    def _make_resources(self) -> tuple[DiscoveredService, DiscoveredWorkload]:
+        svc = DiscoveredService(
+            name="prometheus-kube-prometheus-operator",
+            namespace="prometheus",
+            cluster_ip="10.43.18.245",
+            ports=[ServicePort(name="https", port=443, protocol="TCP", target_port="https")],
+            selector={"app": "kube-prometheus-stack-operator", "release": "prometheus"},
+        )
+        workload = DiscoveredWorkload(
+            name="prometheus-kube-prometheus-operator",
+            namespace="prometheus",
+            pod_labels={"app": "kube-prometheus-stack-operator", "release": "prometheus"},
+            probes=[
+                ContainerProbes(
+                    container_name="kube-prometheus-stack",
+                    liveness=HttpProbeInfo(path="/healthz", port=10250, scheme="HTTPS"),
+                    readiness=None,
+                )
+            ],
+            named_container_ports={"https": 10250},
+        )
+        return svc, workload
+
+    def test_service_skips_port_covered_by_probe(self) -> None:
+        svc, workload = self._make_resources()
+        k8s = _MockDiscoveryK8s(
+            services={"prometheus": [svc]},
+            workloads={"prometheus": [workload]},
+        )
+        monitors = ServicePortDiscovery(k8s).discover("prometheus", "G")
+        assert monitors == [], "Service monitor should be skipped — probe owns this port"
+
+    def test_probe_uses_service_port_not_container_port(self) -> None:
+        svc, workload = self._make_resources()
+        k8s = _MockDiscoveryK8s(
+            services={"prometheus": [svc]},
+            workloads={"prometheus": [workload]},
+        )
+        monitors = ProbeDiscovery(k8s).discover("prometheus", "G")
+        assert len(monitors) == 1
+        url = monitors[0].payload["url"]
+        assert ":443" in url, f"Expected service port 443, got: {url}"
+        assert "/healthz" in url
+        assert url.startswith("https://")
+
+
+# ---------------------------------------------------------------------------
 # DatabasePortDiscovery
 # ---------------------------------------------------------------------------
 
